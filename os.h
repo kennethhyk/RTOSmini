@@ -141,4 +141,5 @@ unsigned int Now();  // number of milliseconds since the RTOS boots.
  *  "a_main()" is a parameterless function defined by the application, which will create all other
  *  application tasks as necessary.
  */
+
 #endif /* _OS_H_ */
