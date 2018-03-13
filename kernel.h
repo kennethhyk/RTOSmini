@@ -8,6 +8,16 @@ typedef void (*voidfuncptr)(void);
 //========================
 
 /**
+  *  This is the set of all possible priority levels for a task
+  */
+typedef enum priority_levels
+{
+	SYSTEM = 0,
+	PERIODIC,
+	ROUND_ROBIN
+} PRIORITY_LEVELS;
+
+/**
   *  This is the set of states that a task can be in at any given time.
   */
 typedef enum process_states {
