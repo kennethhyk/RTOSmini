@@ -1,14 +1,21 @@
+#include "os.h"
 
-#define WORKSPACE 256
-#define MAXPROCESS 4
-#define Disable_Interrupt() asm volatile("cli" ::)
-#define Enable_Interrupt() asm volatile("sei" ::)
-
-typedef void (*voidfuncptr)(void); /* pointer to void f(void) */
+// pointer to void f(void) 
+typedef void (*voidfuncptr)(void); 
 
 //========================
-//  * RTOS Internal      |
+//  RTOS Internal      
 //========================
+
+/**
+  *  This is the set of all possible priority levels for a task
+  */
+typedef enum priority_levels
+{
+	SYSTEM = 0,
+	PERIODIC,
+	ROUND_ROBIN
+} PRIORITY_LEVELS;
 
 /**
   *  This is the set of states that a task can be in at any given time.
@@ -34,20 +41,28 @@ typedef enum kernel_request_type {
   * relevant information about this task. For convenience, we also store
   * the task's stack, i.e., its workspace, in here.
   */
-typedef struct ProcessDescriptor
+typedef struct process_descriptor
 {
-  unsigned char *sp; /* stack pointer into the "workSpace" */
+  unsigned char *sp; // stack pointer for process memory
   unsigned char workSpace[WORKSPACE];
   PROCESS_STATES state;
-  voidfuncptr code; /* function to be executed as a task */
+  voidfuncptr code; // function to be executed as part of task
   KERNEL_REQUEST_TYPE request;
+  PD * queue_next; //  next item in q for process
 } PD;
+
+typedef struct queue
+{
+  unsigned short size;
+  PD *head;
+  PD *tail;
+} task_queue;
 
 /**
   * This table contains ALL process descriptors. It doesn't matter what
   * state a task is in.
   */
-static PD Process[MAXPROCESS];
+static PD Process[MAXTHREAD];
 
 /**
   * The process descriptor of the currently RUNNING task.
@@ -78,4 +93,12 @@ volatile static unsigned int NextP;
 volatile static unsigned int KernelActive;
 
 /** number of tasks created so far */
-volatile static unsigned int Tasks;
+volatile static unsigned int TotalTasks;
+
+/** task queues for each priority of tasks*/
+task_queue SYSTEM_TASKS;
+task_queue PERIODIC_TASKS;
+task_queue ROUND_ROBIN_TASKS;
+
+/** application defined main funciton */
+extern void a_main();
