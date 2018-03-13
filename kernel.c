@@ -4,6 +4,8 @@
 #include <avr/interrupt.h>
 
 #include "kernel.h"
+#include "os.h"
+#include "queue.c"
 
 /**
  * \file active.c
@@ -50,21 +52,39 @@ ISR(TIMER1_COMPA_vect)
 {
   if (KernelActive)
   {
-    Disable_Interrupt();
+    OS_DI();
     Cp->state = READY;
     Enter_Kernel();
     Next_Kernel_Request();
-    Enable_Interrupt();
+    OS_EI();
   }
 }
 
 /**
- * When creating a new task, it is important to initialize its stack just like
- * it has called "Enter_Kernel()"; so that when we switch to it later, we
- * can just restore its execution context on its stack.
- * (See file "cswitch.S" for details.)
+  *  Create a new task
+*/
+static void Kernel_Create_Task(voidfuncptr f)
+{
+  int x;
+
+  if (TotalTasks == MAXTHREAD)
+    return; /* Too many tasks! */
+
+  /* find a DEAD PD that we can use  */
+  for (x = 0; x < MAXTHREAD; x++)
+  {
+    if (Process[x].state == DEAD)
+      break;
+  }
+
+  ++TotalTasks;
+  Setup_Function_Stack(&(Process[x]), f);
+}
+
+/**
+ * Setup function stack and PD
  */
-void Kernel_Create_Task_At(PD *p, voidfuncptr f)
+void Setup_Function_Stack(PD *p, voidfuncptr f)
 {
   unsigned char *sp;
 
@@ -103,27 +123,6 @@ void Kernel_Create_Task_At(PD *p, voidfuncptr f)
 }
 
 /**
-  *  Create a new task
-  */
-static void Kernel_Create_Task(voidfuncptr f)
-{
-  int x;
-
-  if (Tasks == MAXPROCESS)
-    return; /* Too many task! */
-
-  /* find a DEAD PD that we can use  */
-  for (x = 0; x < MAXPROCESS; x++)
-  {
-    if (Process[x].state == DEAD)
-      break;
-  }
-
-  ++Tasks;
-  Kernel_Create_Task_At(&(Process[x]), f);
-}
-
-/**
   * This internal kernel function is a part of the "scheduler". It chooses the 
   * next task to run, i.e., Cp.
   */
@@ -132,17 +131,17 @@ static void Dispatch()
   /* Find the next READY task
   *  Note: if there is no READY task, then this will loop forever!.
   */
-  
+
   while (Process[NextP].state != READY)
   {
-    NextP = (NextP + 1) % MAXPROCESS;
+    NextP = (NextP + 1) % MAXTHREAD;
   }
 
   Cp = &(Process[NextP]);
   CurrentSp = Cp->sp;
   Cp->state = RUNNING;
 
-  NextP = (NextP + 1) % MAXPROCESS;
+  NextP = (NextP + 1) % MAXTHREAD;
 }
 
 /**
@@ -206,11 +205,11 @@ void OS_Init()
 {
   int x;
 
-  Tasks = 0;
+  TotalTasks = 0;
   KernelActive = 0;
   NextP = 0;
   //Reminder: Clear the memory for the task on creation.
-  for (x = 0; x < MAXPROCESS; x++)
+  for (x = 0; x < MAXTHREAD; x++)
   {
     memset(&(Process[x]), 0, sizeof(PD));
     Process[x].state = DEAD;
@@ -222,9 +221,9 @@ void OS_Init()
   */
 void OS_Start()
 {
-  if ((!KernelActive) && (Tasks > 0))
+  if ((!KernelActive) && (TotalTasks > 0))
   {
-    Disable_Interrupt();
+    OS_DI();
     /* we may have to initialize the interrupt vector for Enter_Kernel() here. */
 
     /* here we go...  */
@@ -243,7 +242,7 @@ void Task_Create(voidfuncptr f)
 {
   if (KernelActive)
   {
-    Disable_Interrupt();
+    OS_DI();
     Cp->request = CREATE;
     Cp->code = f;
     Enter_Kernel();
@@ -262,7 +261,7 @@ void Task_Next()
 {
   if (KernelActive)
   {
-    Disable_Interrupt();
+    OS_DI();
     Cp->request = NEXT;
     Enter_Kernel();
   }
@@ -275,7 +274,7 @@ void Task_Terminate()
 {
   if (KernelActive)
   {
-    Disable_Interrupt();
+    OS_DI();
     Cp->request = TERMINATE;
     Enter_Kernel();
     /* never returns here! */
