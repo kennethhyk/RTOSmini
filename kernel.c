@@ -7,34 +7,11 @@
 #include "os.h"
 #include "queue.c"
 
-/**
- * \file active.c
- * \brief A Skeleton Implementation of an RTOS
- * 
- * \mainpage A Skeleton Implementation of a "Full-Served" RTOS Model
- * This is an example of how to implement context-switching based on a 
- * full-served model. That is, the RTOS is implemented by an independent
- * "kernel" task, which has its own stack and calls the appropriate kernel 
- * function on behalf of the user task.
- *
- * \author Dr. Mantis Cheng
- * \date 29 September 2006
- *
- * ChangeLog: Modified by Alexander M. Hoole, October 2006.
- *			  -Rectified errors and enabled context switching.
- *			  -LED Testing code added for development (remove later).
- *
- * \section Implementation Note
- * This example uses the ATMEL AT90USB1287 instruction set as an example
- * for implementing the context switching mechanism. 
- * This code is ready to be loaded onto an AT90USBKey.  Once loaded the 
- * RTOS scheduling code will alternate lighting of the GREEN LED light on
- * LED D2 and D5 whenever the correspoing PING and PONG tasks are running.
- * (See the file "cswitch.S" for details.)
- */
-
-//Comment out the following line to remove debugging code from compiled version.
 // #define DEBUG
+
+void idle_func(){
+  while(1);
+}
 
 void timer1_init()
 {
@@ -50,6 +27,7 @@ void timer1_init()
 
 ISR(TIMER1_COMPA_vect)
 {
+  num_ticks++;
   if (KernelActive)
   {
     OS_DI();
@@ -81,29 +59,25 @@ PD *static void Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
   }
 
   TotalTasks++;
-  Setup_Function_Stack(p, f);
+  Setup_Function_Stack(p, pid, f);
 
   p->priority = level;
-  p->arg = arg
-  return p;
+  p->arg = arg return p;
 }
 
 /**
  * Setup function stack and PD
  */
-void Setup_Function_Stack(PD *p, voidfuncptr f)
+void Setup_Function_Stack(PD *p, PID pid, voidfuncptr f)
 {
   unsigned char *sp;
 
-  //Changed -2 to -1 to fix off by one error.
   sp = (unsigned char *)&(p->workSpace[WORKSPACE - 1]);
-
-  //Initialize the workspace (i.e., stack) and PD here!
 
   //Clear workspace
   memset(&(p->workSpace), 0, WORKSPACE);
 
-  //Notice that we are placing the address (16-bit) of the functions
+  //Notice that we are placing the address (17-bit) of the functions
   //onto the stack in reverse byte order (least significant first, followed
   //by most significant).  This is because the "return" assembly instructions
   //(rtn and rti) pop addresses off in BIG ENDIAN (most sig. first, least sig.
@@ -122,54 +96,64 @@ void Setup_Function_Stack(PD *p, voidfuncptr f)
   //Place stack pointer at top of stack
   sp = sp - 34;
 
-  p->pid = x;
-  p->sp = sp;  /* stack pointer into the "workSpace" */
-  p->code = f; /* function to be executed as a task */
+  p->pid = pid;
+  p->sp = sp;
+  p->code = f;
   p->request = NONE;
   p->state = READY;
   p->next = NULL;
 }
 
+// Creates system task and enqueues into SYSTEM_TASKS queue
 PID Task_Create_System(voidfuncptr f, int arg)
 {
   enum PRIORITY_LEVEL priority = SYSTEM;
   PD *p = Kernel_Create_Task(f, arg, priority);
-  if (p == NULL) return -1; // Too many tasks :(
+  if (p == NULL)
+    return -1; // Too many tasks :(
 
   enqueue(&SYSTEM_TASKS, p);
   return p->pid;
 }
 
+// Creates RR task and enqueues into RR_TASKS queue
 PID Task_Create_RR(voidfuncptr f, int arg)
 {
   enum PRIORITY_LEVEL priority = RR;
   PD *p = Kernel_Create_Task(f, arg, priority);
-  if (p == NULL) return -1; // Too many tasks :(
+  if (p == NULL)
+    return -1; // Too many tasks :(
 
   enqueue(&RR_TASKS, p);
   return p->pid;
 }
 
+// Creates periodic task and enqueues into PERIODIC_TASKS queue
 PID Task_Create_Period(voidfuncptr f, int arg, TICK period, TICK wcet, TICK offset)
 {
   enum PRIORITY_LEVEL priority = PERIODIC;
   PD *p = Kernel_Create_Task(f, arg, priority);
-  if (p == NULL) return -1; // Too many tasks :(
+  if (p == NULL)
+    return -1; // Too many tasks :(
 
   enqueue(&PERIODIC_TASKS, p);
-  
-  // set periodic task specific attributes 
+
+  // set periodic task specific attributes
   p->period = period;
   p->wcet = wcet;
-  p->offset = offset;
+  p->next_start = num_ticks + offset;
+  p->ticks_remaining = wcet;
+
   return p->pid;
 }
 
-int  Task_GetArg(void){
+int Task_GetArg(void)
+{
   return Cp->arg;
 }
 
-PID  Task_Pid(void){
+PID Task_Pid(void)
+{
   return Cp->pid;
 }
 
@@ -179,25 +163,35 @@ PID  Task_Pid(void){
   */
 static void Dispatch()
 {
-  /* Find the next READY task
-  *  Note: if there is no READY task, then this will loop forever!.
-  */
+  if (Cp->state == RUNNING) return;
 
-  while (Process[NextP].state != READY)
+  // Look through q's and pick task to run according to precedence
+  if (SYSTEM_TASKS.head && peek(&SYSTEM_TASKS)->state != BLOCKED)
   {
-    NextP = (NextP + 1) % MAXTHREAD;
+    Cp = peek(&SYSTEM_TASKS);
+  }
+  // periodic tasks are sorted by start time
+  else if (PERIODIC_TASKS.head > 0 && num_ticks >= peek(&PERIODIC_TASKS)->next_start)
+  {
+    Cp = peek(&PERIODIC_TASKS);
+  }
+  else if (RR_TASKS.size > 0) 
+  {
+    while (peek(&RR_TASKS)->state == BLOCKED)
+    {
+      enqueue(&RR_TASKS, deque(&RR_TASKS));
+    }
+    // idle task exists in rrq
+    Cp = peek(&rr_tasks);
   }
 
-  Cp = &(Process[NextP]);
   CurrentSp = Cp->sp;
   Cp->state = RUNNING;
-
-  NextP = (NextP + 1) % MAXTHREAD;
 }
 
 /**
   * This internal kernel function is the "main" driving loop of this full-served
-  * model architecture. Basically, on OS_Start(), the kernel repeatedly
+  * model architecture. On OS_Start(), the kernel repeatedly
   * requests the next user task's next system call and then invokes the
   * corresponding kernel function on its behalf.
   *
@@ -285,37 +279,14 @@ void OS_Start()
 }
 
 /**
-  * For this example, we only support cooperatively multitasking, i.e.,
-  * each task gives up its share of the processor voluntarily by calling
-  * Task_Next().
-  */
-void Task_Create(voidfuncptr f)
-{
-  if (KernelActive)
-  {
-    OS_DI();
-    Cp->request = CREATE;
-    Cp->code = f;
-    Enter_Kernel();
-  }
-  else
-  {
-    /* call the RTOS function directly */
-    Kernel_Create_Task(f);
-  }
-}
-
-/**
   * The calling task gives up its share of the processor voluntarily.
   */
 void Task_Next()
 {
-  if (KernelActive)
-  {
-    OS_DI();
-    Cp->request = NEXT;
-    Enter_Kernel();
-  }
+  OS_DI();
+  Cp->state = READY;
+  Cp->request = NEXT;
+  Enter_Kernel();
 }
 
 /**
@@ -323,13 +294,13 @@ void Task_Next()
   */
 void Task_Terminate()
 {
-  if (KernelActive)
-  {
-    OS_DI();
-    Cp->request = TERMINATE;
-    Enter_Kernel();
-    /* never returns here! */
-  }
+  OS_DI();
+  Cp->request = TERMINATE;
+  Cp->state = DEAD;
+  // Process[Cp->pid].state = DEAD;
+  Tasks--;
+  Enter_Kernel();
+  /* never returns here! */
 }
 
 /*============

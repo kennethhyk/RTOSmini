@@ -14,7 +14,8 @@ typedef enum priority_levels
 {
 	SYSTEM = 0,
 	PERIODIC,
-	RR
+	RR,
+  IDLE
 } PRIORITY_LEVEL;
 
 /**
@@ -49,7 +50,8 @@ typedef struct process_descriptor
   unsigned char workSpace[WORKSPACE];
   TICK period;
   TICK wcet;
-  TICK offset;
+  TICK next_start;
+  TICK remaining_ticks;
   PROCESS_STATES state;
   voidfuncptr code; // function to be executed as part of task
   KERNEL_REQUEST_TYPE request;
@@ -100,6 +102,9 @@ volatile static unsigned int KernelActive;
 
 /** number of tasks created so far */
 volatile static unsigned int TotalTasks;
+
+// Tick count in order to schedule periodic tasks
+volatile unsigned int num_ticks = 0;
 
 /** task queues for each priority of tasks*/
 task_queue SYSTEM_TASKS;
