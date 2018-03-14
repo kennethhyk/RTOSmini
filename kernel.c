@@ -7,96 +7,52 @@
 #include "os.h"
 #include "queue.c"
 
-/**
- * \file active.c
- * \brief A Skeleton Implementation of an RTOS
- * 
- * \mainpage A Skeleton Implementation of a "Full-Served" RTOS Model
- * This is an example of how to implement context-switching based on a 
- * full-served model. That is, the RTOS is implemented by an independent
- * "kernel" task, which has its own stack and calls the appropriate kernel 
- * function on behalf of the user task.
- *
- * \author Dr. Mantis Cheng
- * \date 29 September 2006
- *
- * ChangeLog: Modified by Alexander M. Hoole, October 2006.
- *			  -Rectified errors and enabled context switching.
- *			  -LED Testing code added for development (remove later).
- *
- * \section Implementation Note
- * This example uses the ATMEL AT90USB1287 instruction set as an example
- * for implementing the context switching mechanism. 
- * This code is ready to be loaded onto an AT90USBKey.  Once loaded the 
- * RTOS scheduling code will alternate lighting of the GREEN LED light on
- * LED D2 and D5 whenever the correspoing PING and PONG tasks are running.
- * (See the file "cswitch.S" for details.)
- */
-
-//Comment out the following line to remove debugging code from compiled version.
 // #define DEBUG
-
-void timer1_init()
-{
-  cli();
-  TCCR1A = 0;
-  TCCR1B = 0;
-  OCR1A = 15999;
-  TCCR1B |= (1 << WGM12);
-  TCCR1B |= (1 << CS00);
-  TIMSK1 |= (1 << OCIE1A);
-  sei();
-}
-
-ISR(TIMER1_COMPA_vect)
-{
-  if (KernelActive)
-  {
-    OS_DI();
-    Cp->state = READY;
-    Enter_Kernel();
-    Next_Kernel_Request();
-    OS_EI();
-  }
-}
 
 /**
   *  Create a new task
 */
-static void Kernel_Create_Task(voidfuncptr f)
+PD *static void Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
 {
   int x;
+  PD *p = NULL;
 
   if (TotalTasks == MAXTHREAD)
-    return; /* Too many tasks! */
+  {
+    return p; // Too many tasks!
+  }
 
-  /* find a DEAD PD that we can use  */
+  // find a DEAD PD that we can use
   for (x = 0; x < MAXTHREAD; x++)
   {
     if (Process[x].state == DEAD)
+    {
+      p = &(Process[x]);
       break;
+    }
   }
 
-  ++TotalTasks;
-  Setup_Function_Stack(&(Process[x]), f);
+  TotalTasks++;
+  Setup_Function_Stack(p, x, f);
+
+  p->priority = level;
+  p->arg = arg;
+  return p;
 }
 
 /**
  * Setup function stack and PD
  */
-void Setup_Function_Stack(PD *p, voidfuncptr f)
+void Setup_Function_Stack(PD *p, PID pid, voidfuncptr f)
 {
   unsigned char *sp;
 
-  //Changed -2 to -1 to fix off by one error.
   sp = (unsigned char *)&(p->workSpace[WORKSPACE - 1]);
-
-  //Initialize the workspace (i.e., stack) and PD here!
 
   //Clear workspace
   memset(&(p->workSpace), 0, WORKSPACE);
 
-  //Notice that we are placing the address (16-bit) of the functions
+  //Notice that we are placing the address (17-bit) of the functions
   //onto the stack in reverse byte order (least significant first, followed
   //by most significant).  This is because the "return" assembly instructions
   //(rtn and rti) pop addresses off in BIG ENDIAN (most sig. first, least sig.
@@ -115,11 +71,73 @@ void Setup_Function_Stack(PD *p, voidfuncptr f)
   //Place stack pointer at top of stack
   sp = sp - 34;
 
-  p->sp = sp;  /* stack pointer into the "workSpace" */
-  p->code = f; /* function to be executed as a task */
+  p->pid = pid;
+  p->sp = sp;
+  p->code = f;
   p->request = NONE;
-
   p->state = READY;
+  p->next = NULL;
+  p->ticks_remaining = 0;
+}
+
+// Creates system task and enqueues into SYSTEM_TASKS queue
+PID Task_Create_System(voidfuncptr f, int arg)
+{
+  enum PRIORITY_LEVEL priority = SYSTEM;
+  PD *p = Kernel_Create_Task(f, arg, priority);
+  if (p == NULL)
+  {
+    return -1; // Too many tasks :(
+  }
+
+  enqueue(&SYSTEM_TASKS, p);
+  return p->pid;
+}
+
+// Creates RR task and enqueues into RR_TASKS queue
+PID Task_Create_RR(voidfuncptr f, int arg)
+{
+  enum PRIORITY_LEVEL priority = RR;
+  PD *p = Kernel_Create_Task(f, arg, priority);
+  if (p == NULL)
+  {
+    return -1; // Too many tasks :(
+  }
+
+  enqueue(&RR_TASKS, p);
+  return p->pid;
+}
+
+// Creates periodic task and enqueues into
+// PERIODIC_TASKS queue in order of start time
+PID Task_Create_Period(voidfuncptr f, int arg, TICK period, TICK wcet, TICK offset)
+{
+  enum PRIORITY_LEVEL priority = PERIODIC;
+  PD *p = Kernel_Create_Task(f, arg, priority);
+  if (p == NULL)
+  {
+    return -1; // Too many tasks :(
+  }
+
+  enqueue_in_offset_order(&PERIODIC_TASKS, p);
+
+  // set periodic task specific attributes
+  p->period = period;
+  p->wcet = wcet;
+  p->start_time = num_ticks + offset;
+  p->ticks_remaining = wcet;
+
+  return p->pid;
+}
+
+int Task_GetArg(void)
+{
+  return Cp->arg;
+}
+
+PID Task_Pid(void)
+{
+  return Cp->pid;
 }
 
 /**
@@ -128,29 +146,42 @@ void Setup_Function_Stack(PD *p, voidfuncptr f)
   */
 static void Dispatch()
 {
-  /* Find the next READY task
-  *  Note: if there is no READY task, then this will loop forever!.
-  */
-
-  while (Process[NextP].state != READY)
+  if (Cp->state == RUNNING)
   {
-    NextP = (NextP + 1) % MAXTHREAD;
+    return;
   }
 
-  Cp = &(Process[NextP]);
+  // Look through q's and pick task to run according to q precedence
+  if (SYSTEM_TASKS.head && peek(&SYSTEM_TASKS)->state != BLOCKED)
+  {
+    Cp = peek(&SYSTEM_TASKS);
+  }
+  // periodic tasks are sorted by start time, so only looking at head suffices
+  else if (PERIODIC_TASKS.head && num_ticks >= peek(&PERIODIC_TASKS)->start_time)
+  {
+    Cp = peek(&PERIODIC_TASKS);
+  }
+  else if (RR_TASKS.size > 0)
+  {
+    // go through the q and find
+    while (peek(&RR_TASKS)->state == BLOCKED)
+    {
+      // idle task exists in rrq so this loop WILL terminate
+      enqueue(&RR_TASKS, deque(&RR_TASKS));
+    }
+    Cp = peek(&RR_TASKS);
+  }
+
   CurrentSp = Cp->sp;
   Cp->state = RUNNING;
-
-  NextP = (NextP + 1) % MAXTHREAD;
 }
 
 /**
   * This internal kernel function is the "main" driving loop of this full-served
-  * model architecture. Basically, on OS_Start(), the kernel repeatedly
-  * requests the next user task's next system call and then invokes the
-  * corresponding kernel function on its behalf.
+  * model architecture. On OS_Start(), the kernel repeatedly
+  * requests the next available user task's execution, and then invokes 
+  * the corresponding kernel function on its behalf.
   *
-  * This is the main loop of our kernel, called by OS_Start().
   */
 static void Next_Kernel_Request()
 {
@@ -160,31 +191,113 @@ static void Next_Kernel_Request()
   {
     Cp->request = NONE; /* clear its request */
 
-    /* activate this newly selected task */
+    // activate this newly selected task
     CurrentSp = Cp->sp;
-    Exit_Kernel(); /* or CSwitch() */
+    // the context switching code now replaces
+    // physical stack pointer with this value
+    Exit_Kernel();
 
-    /* if this task makes a system call, it will return to here! */
+    // program counter returns here on
+    // a call to Task_Terminate after
+    // dispatched function returns
 
     /* save the Cp's stack pointer */
     Cp->sp = CurrentSp;
 
     switch (Cp->request)
     {
-    case CREATE:
-      Kernel_Create_Task(Cp->code);
-      break;
-    case NEXT:
-    case NONE:
-      /* NONE could be caused by a timer interrupt */
-      Cp->state = READY;
+    case TIMER:
+      // Tasks gets interrupted
+      // Reaches here from ISR
+      switch (Cp->type)
+      {
+      case SYSTEM:
+        // nothing to do, pass
+        break;
+      case PERIODIC:
+        // reduce ticks
+        Cp->ticks_remaining--;
+        if (Cp->ticks_remaining <= 0)
+        {
+          // not good
+          OS_Abort(-1);
+        }
+        break;
+      case RR:
+        Cp->ticks_remaining--;
+        if (Cp->ticks_remaining <= 0)
+        {
+          // reset ticks and move to back of q
+          Cp->ticks_remaining = 1;
+          enqueue(&RR_TASKS, deque(&RR_TASKS));
+        }
+        break;
+      }
+      if (Cp->state != BLOCKED)
+        Cp->state = READY;
       Dispatch();
       break;
+
+    case NEXT:
+      // Tasks giving away control voluntarily (i.e. yield)
+      switch (Cp->type)
+      {
+      case SYSTEM:
+        // dequeue and enqueue
+        enqueue(&SYSTEM_TASKS, deque(&SYSTEM_TASKS));
+        break;
+
+      case PERIODIC:
+        // dequeue, reset start time, ticks_remaining
+        // and enqueue in order in q
+        deque(&PERIODIC_TASKS);
+        Cp->start_time = Cp->start_time + Cp->period;
+        Cp->ticks_remaining = Cp->wcet;
+        enqueue_in_offset_order(&PERIODIC_TASKS, Cp);
+        break;
+
+      case RR:
+        // RR task yielding
+        // reset ticks and move to back of q
+        Cp->ticks_remaining = 1;
+        enqueue(&RR_TASKS, deque(&RR_TASKS));
+        break;
+      }
+      // change state of current process and dispatch
+      if (Cp->state != BLOCKED){
+        Cp->state = READY;
+      }
+      // choose new task to run
+      Dispatch();
+      break;
+
+    case NONE:
+      /* NONE could be caused by a timer interrupt */
+      if (Cp->state != BLOCKED){
+        Cp->state = READY;
+      }
+      Dispatch();
+      break;
+
     case TERMINATE:
       /* deallocate all resources used by this task */
+      switch (Cp->type)
+      {
+      case SYSTEM:
+        deque(&SYSTEM_TASKS);
+        break;
+      case PERIODIC:
+        deque(&PERIODIC_TASKS);
+        break;
+      case RR:
+        deque(&RR_TASKS);
+        break;
+      }
+
       Cp->state = DEAD;
       Dispatch();
       break;
+
     default:
       /* Houston! we have a problem here! */
       break;
@@ -192,9 +305,9 @@ static void Next_Kernel_Request()
   }
 }
 
-/*================
-  * RTOS  API  and Stubs
-  *================
+/*========================
+  |  RTOS API and Stubs  |
+  *=======================
   */
 
 /**
@@ -204,16 +317,18 @@ static void Next_Kernel_Request()
 void OS_Init()
 {
   int x;
-
   TotalTasks = 0;
   KernelActive = 0;
-  NextP = 0;
-  //Reminder: Clear the memory for the task on creation.
+  //Clear memory for each thread/process stack
   for (x = 0; x < MAXTHREAD; x++)
   {
     memset(&(Process[x]), 0, sizeof(PD));
     Process[x].state = DEAD;
   }
+
+  queue_init(&system_tasks);
+  queue_init(&periodic_tasks);
+  queue_init(&rr_tasks);
 }
 
 /**
@@ -221,36 +336,14 @@ void OS_Init()
   */
 void OS_Start()
 {
+  OS_DI();
   if ((!KernelActive) && (TotalTasks > 0))
   {
-    OS_DI();
-    /* we may have to initialize the interrupt vector for Enter_Kernel() here. */
-
-    /* here we go...  */
+    init_timer();
+    // Select a free task and dispatch it
     KernelActive = 1;
     Next_Kernel_Request();
     /* NEVER RETURNS!!! */
-  }
-}
-
-/**
-  * For this example, we only support cooperatively multitasking, i.e.,
-  * each task gives up its share of the processor voluntarily by calling
-  * Task_Next().
-  */
-void Task_Create(voidfuncptr f)
-{
-  if (KernelActive)
-  {
-    OS_DI();
-    Cp->request = CREATE;
-    Cp->code = f;
-    Enter_Kernel();
-  }
-  else
-  {
-    /* call the RTOS function directly */
-    Kernel_Create_Task(f);
   }
 }
 
@@ -259,12 +352,10 @@ void Task_Create(voidfuncptr f)
   */
 void Task_Next()
 {
-  if (KernelActive)
-  {
-    OS_DI();
-    Cp->request = NEXT;
-    Enter_Kernel();
-  }
+  OS_DI();
+  Cp->state = READY;
+  Cp->request = NEXT;
+  Enter_Kernel();
 }
 
 /**
@@ -272,13 +363,40 @@ void Task_Next()
   */
 void Task_Terminate()
 {
-  if (KernelActive)
+  OS_DI();
+  Cp->request = TERMINATE;
+  Cp->state = DEAD;
+  // Process[Cp->pid].state = DEAD;
+  Tasks--;
+  Enter_Kernel();
+  /* never returns here! */
+}
+
+void idle_func()
+{
+  while (1)
   {
-    OS_DI();
-    Cp->request = TERMINATE;
-    Enter_Kernel();
-    /* never returns here! */
+    ;
   }
+}
+
+void init_timer()
+{
+  TCCR1A = 0;
+  TCCR1B = 0;
+  OCR1A = 15999;
+  TCCR1B |= (1 << WGM12);
+  TCCR1B |= (1 << CS00);
+  TIMSK1 |= (1 << OCIE1A);
+  OS_EI();
+}
+
+ISR(TIMER1_COMPA_vect)
+{
+  num_ticks++;
+  OS_DI();
+  Cp->state = TIMER;
+  Enter_Kernel();
 }
 
 /*============
@@ -325,7 +443,6 @@ void main()
   OS_Init();
   Task_Create(Pong);
   Task_Create(Ping);
-  DDRB = 0b11000000;
-  timer1_init();
+  // DDRB = 0b11000000;
   OS_Start();
 }

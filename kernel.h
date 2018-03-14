@@ -14,8 +14,9 @@ typedef enum priority_levels
 {
 	SYSTEM = 0,
 	PERIODIC,
-	ROUND_ROBIN
-} PRIORITY_LEVELS;
+	RR,
+  IDLE
+} PRIORITY_LEVEL;
 
 /**
   *  This is the set of states that a task can be in at any given time.
@@ -33,7 +34,8 @@ typedef enum kernel_request_type {
   NONE = 0,
   CREATE,
   NEXT,
-  TERMINATE
+  TERMINATE,
+  TIMER
 } KERNEL_REQUEST_TYPE;
 
 /**
@@ -43,12 +45,19 @@ typedef enum kernel_request_type {
   */
 typedef struct process_descriptor
 {
+  PID pid;
+  int arg; // integer function argument
   unsigned char *sp; // stack pointer for process memory
   unsigned char workSpace[WORKSPACE];
+  TICK period;
+  TICK wcet;
+  TICK start_time;
+  TICK remaining_ticks;
   PROCESS_STATES state;
   voidfuncptr code; // function to be executed as part of task
   KERNEL_REQUEST_TYPE request;
   PD * queue_next; //  next item in q for process
+  PRIORITY_LEVEL priority;
 } PD;
 
 typedef struct queue
@@ -95,10 +104,13 @@ volatile static unsigned int KernelActive;
 /** number of tasks created so far */
 volatile static unsigned int TotalTasks;
 
+// Tick count in order to schedule periodic tasks
+volatile unsigned int num_ticks = 0;
+
 /** task queues for each priority of tasks*/
 task_queue SYSTEM_TASKS;
 task_queue PERIODIC_TASKS;
-task_queue ROUND_ROBIN_TASKS;
+task_queue RR_TASKS;
 
 /** application defined main funciton */
 extern void a_main();
