@@ -34,7 +34,8 @@ typedef enum kernel_request_type {
   NONE = 0,
   CREATE,
   NEXT,
-  TERMINATE
+  TERMINATE,
+  TIMER
 } KERNEL_REQUEST_TYPE;
 
 /**

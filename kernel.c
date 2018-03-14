@@ -9,35 +9,6 @@
 
 // #define DEBUG
 
-void idle_func(){
-  while(1);
-}
-
-void timer1_init()
-{
-  cli();
-  TCCR1A = 0;
-  TCCR1B = 0;
-  OCR1A = 15999;
-  TCCR1B |= (1 << WGM12);
-  TCCR1B |= (1 << CS00);
-  TIMSK1 |= (1 << OCIE1A);
-  sei();
-}
-
-ISR(TIMER1_COMPA_vect)
-{
-  num_ticks++;
-  if (KernelActive)
-  {
-    OS_DI();
-    Cp->state = READY;
-    Enter_Kernel();
-    Next_Kernel_Request();
-    OS_EI();
-  }
-}
-
 /**
   *  Create a new task
 */
@@ -102,6 +73,7 @@ void Setup_Function_Stack(PD *p, PID pid, voidfuncptr f)
   p->request = NONE;
   p->state = READY;
   p->next = NULL;
+  p->ticks_remaining = 0;
 }
 
 // Creates system task and enqueues into SYSTEM_TASKS queue
@@ -136,7 +108,7 @@ PID Task_Create_Period(voidfuncptr f, int arg, TICK period, TICK wcet, TICK offs
   if (p == NULL)
     return -1; // Too many tasks :(
 
-  enqueue(&PERIODIC_TASKS, p);
+  enqueue_in_offset_order(&PERIODIC_TASKS, p);
 
   // set periodic task specific attributes
   p->period = period;
@@ -163,25 +135,27 @@ PID Task_Pid(void)
   */
 static void Dispatch()
 {
-  if (Cp->state == RUNNING) return;
+  if (Cp->state == RUNNING)
+    return;
 
   // Look through q's and pick task to run according to precedence
   if (SYSTEM_TASKS.head && peek(&SYSTEM_TASKS)->state != BLOCKED)
   {
     Cp = peek(&SYSTEM_TASKS);
   }
-  // periodic tasks are sorted by start time
+  // periodic tasks are sorted by start time, so only looking at head suffices
   else if (PERIODIC_TASKS.head > 0 && num_ticks >= peek(&PERIODIC_TASKS)->next_start)
   {
     Cp = peek(&PERIODIC_TASKS);
   }
-  else if (RR_TASKS.size > 0) 
+  else if (RR_TASKS.size > 0)
   {
+    // go through the q and find 
     while (peek(&RR_TASKS)->state == BLOCKED)
     {
+      // idle task exists in rrq so this loop will terminate
       enqueue(&RR_TASKS, deque(&RR_TASKS));
     }
-    // idle task exists in rrq
     Cp = peek(&rr_tasks);
   }
 
@@ -205,41 +179,118 @@ static void Next_Kernel_Request()
   {
     Cp->request = NONE; /* clear its request */
 
-    /* activate this newly selected task */
+    // activate this newly selected task
     CurrentSp = Cp->sp;
-    Exit_Kernel(); /* or CSwitch() */
+    // the context switching code now replaces
+    // physical stack pointer with this value
+    Exit_Kernel();
 
-    /* if this task makes a system call, it will return to here! */
+    // program counter returns here on 
+    // a call to Task_Terminate
 
     /* save the Cp's stack pointer */
     Cp->sp = CurrentSp;
 
     switch (Cp->request)
     {
-    case CREATE:
-      Kernel_Create_Task(Cp->code);
-      break;
-    case NEXT:
-    case NONE:
-      /* NONE could be caused by a timer interrupt */
-      Cp->state = READY;
-      Dispatch();
-      break;
-    case TERMINATE:
-      /* deallocate all resources used by this task */
-      Cp->state = DEAD;
-      Dispatch();
-      break;
-    default:
-      /* Houston! we have a problem here! */
-      break;
+      case TIMER:
+        // Tasks gets interrupted
+        // Reaches here from ISR
+        switch (Cp->type)
+        {
+          case SYSTEM: 
+            // nothing to do, pass
+            break;
+          case PERIODIC: 
+            // reduce ticks
+            Cp->ticks_remaining--;
+            if (Cp->ticks_remaining <= 0)
+            {
+              // not good 
+              OS_Abort(-1);
+            }
+            break;
+          case RR:
+            Cp->ticks_remaining--;
+            if (Cp->ticks_remaining <= 0)
+            {
+              // reset ticks and move to back of q
+              Cp->ticks_remaining = 1;
+              enqueue(&RR_TASKS, deque(&RR_TASKS));
+            }
+            break;
+        }
+        if (Cp->state != BLOCKED)
+            Cp->state = READY;
+        Dispatch();
+        break;
+
+      case NEXT:
+        // Tasks giving away control voluntarily (i.e. yield)
+        switch (Cp->type)
+        {
+          case SYSTEM:
+            // dequeue and enqueue
+            enqueue(&SYSTEM_TASKS, deque(&SYSTEM_TASKS));
+            break;
+          case PERIODIC:
+            // dequeue, reset start time, ticks_remaining
+            // and enqueue in order in q
+            deque(&PERIODIC_TASKS);
+            Cp->next_start = Cp->next_start + Cp->period;
+            Cp->ticks_remaining = Cp->wcet;
+            enqueue_in_offset_order(&PERIODIC_TASKS, Cp);
+            break;
+          case RR:
+            // RR task yielding
+            // reset ticks and move to back of q
+            Cp->ticks_remaining = 1;
+            enqueue(&RR_TASKS, deque(&RR_TASKS));
+            break;
+        }
+        // change state of current process and dispatch
+        if (Cp->state != BLOCKED)
+          Cp->state = READY;
+        // choose new task to run
+        Dispatch();
+        break;
+
+      case NONE:
+        /* NONE could be caused by a timer interrupt */
+        if (Cp->state != BLOCKED)
+          Cp->state = READY;
+        Dispatch();
+        break;
+
+      case TERMINATE:
+        /* deallocate all resources used by this task */
+        switch (Cp->type)
+        {
+          case SYSTEM:
+            deque(&SYSTEM_TASKS);
+            break;
+          case PERIODIC:
+            deque(&PERIODIC_TASKS);
+            break;
+          case RR:
+            deque(&RR_TASKS);
+            break;
+        }
+
+        Cp->state = DEAD;
+        Dispatch();
+        break;
+
+      default:
+        /* Houston! we have a problem here! */
+        break;
     }
   }
 }
 
-/*================
-  * RTOS  API  and Stubs
-  *================
+/*========================
+  |  RTOS API and Stubs  |
+  *=======================
   */
 
 /**
@@ -249,16 +300,18 @@ static void Next_Kernel_Request()
 void OS_Init()
 {
   int x;
-
   TotalTasks = 0;
   KernelActive = 0;
-  NextP = 0;
-  //Reminder: Clear the memory for the task on creation.
+  //Clear memory for each thread/process stack
   for (x = 0; x < MAXTHREAD; x++)
   {
     memset(&(Process[x]), 0, sizeof(PD));
     Process[x].state = DEAD;
   }
+
+  queue_init(&system_tasks);
+  queue_init(&periodic_tasks);
+  queue_init(&rr_tasks);
 }
 
 /**
@@ -266,12 +319,11 @@ void OS_Init()
   */
 void OS_Start()
 {
+  OS_DI();
   if ((!KernelActive) && (TotalTasks > 0))
   {
-    OS_DI();
-    /* we may have to initialize the interrupt vector for Enter_Kernel() here. */
-
-    /* here we go...  */
+    init_timer();
+    // Select a free task and dispatch it
     KernelActive = 1;
     Next_Kernel_Request();
     /* NEVER RETURNS!!! */
@@ -301,6 +353,33 @@ void Task_Terminate()
   Tasks--;
   Enter_Kernel();
   /* never returns here! */
+}
+
+void idle_func()
+{
+  while (1)
+  {
+    ;
+  }
+}
+
+void init_timer()
+{
+  TCCR1A = 0;
+  TCCR1B = 0;
+  OCR1A = 15999;
+  TCCR1B |= (1 << WGM12);
+  TCCR1B |= (1 << CS00);
+  TIMSK1 |= (1 << OCIE1A);
+  OS_EI();
+}
+
+ISR(TIMER1_COMPA_vect)
+{
+  num_ticks++;
+  OS_DI();
+  Cp->state = TIMER;
+  Enter_Kernel();
 }
 
 /*============
@@ -347,7 +426,6 @@ void main()
   OS_Init();
   Task_Create(Pong);
   Task_Create(Ping);
-  DDRB = 0b11000000;
-  timer1_init();
+  // DDRB = 0b11000000;
   OS_Start();
 }
