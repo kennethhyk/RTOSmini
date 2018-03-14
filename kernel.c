@@ -18,7 +18,9 @@ PD *static void Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
   PD *p = NULL;
 
   if (TotalTasks == MAXTHREAD)
+  {
     return p; // Too many tasks!
+  }
 
   // find a DEAD PD that we can use
   for (x = 0; x < MAXTHREAD; x++)
@@ -26,14 +28,16 @@ PD *static void Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
     if (Process[x].state == DEAD)
     {
       p = &(Process[x]);
+      break;
     }
   }
 
   TotalTasks++;
-  Setup_Function_Stack(p, pid, f);
+  Setup_Function_Stack(p, x, f);
 
   p->priority = level;
-  p->arg = arg return p;
+  p->arg = arg;
+  return p;
 }
 
 /**
@@ -82,7 +86,9 @@ PID Task_Create_System(voidfuncptr f, int arg)
   enum PRIORITY_LEVEL priority = SYSTEM;
   PD *p = Kernel_Create_Task(f, arg, priority);
   if (p == NULL)
+  {
     return -1; // Too many tasks :(
+  }
 
   enqueue(&SYSTEM_TASKS, p);
   return p->pid;
@@ -94,26 +100,31 @@ PID Task_Create_RR(voidfuncptr f, int arg)
   enum PRIORITY_LEVEL priority = RR;
   PD *p = Kernel_Create_Task(f, arg, priority);
   if (p == NULL)
+  {
     return -1; // Too many tasks :(
+  }
 
   enqueue(&RR_TASKS, p);
   return p->pid;
 }
 
-// Creates periodic task and enqueues into PERIODIC_TASKS queue
+// Creates periodic task and enqueues into
+// PERIODIC_TASKS queue in order of start time
 PID Task_Create_Period(voidfuncptr f, int arg, TICK period, TICK wcet, TICK offset)
 {
   enum PRIORITY_LEVEL priority = PERIODIC;
   PD *p = Kernel_Create_Task(f, arg, priority);
   if (p == NULL)
+  {
     return -1; // Too many tasks :(
+  }
 
   enqueue_in_offset_order(&PERIODIC_TASKS, p);
 
   // set periodic task specific attributes
   p->period = period;
   p->wcet = wcet;
-  p->next_start = num_ticks + offset;
+  p->start_time = num_ticks + offset;
   p->ticks_remaining = wcet;
 
   return p->pid;
@@ -136,27 +147,29 @@ PID Task_Pid(void)
 static void Dispatch()
 {
   if (Cp->state == RUNNING)
+  {
     return;
+  }
 
-  // Look through q's and pick task to run according to precedence
+  // Look through q's and pick task to run according to q precedence
   if (SYSTEM_TASKS.head && peek(&SYSTEM_TASKS)->state != BLOCKED)
   {
     Cp = peek(&SYSTEM_TASKS);
   }
   // periodic tasks are sorted by start time, so only looking at head suffices
-  else if (PERIODIC_TASKS.head > 0 && num_ticks >= peek(&PERIODIC_TASKS)->next_start)
+  else if (PERIODIC_TASKS.head && num_ticks >= peek(&PERIODIC_TASKS)->start_time)
   {
     Cp = peek(&PERIODIC_TASKS);
   }
   else if (RR_TASKS.size > 0)
   {
-    // go through the q and find 
+    // go through the q and find
     while (peek(&RR_TASKS)->state == BLOCKED)
     {
-      // idle task exists in rrq so this loop will terminate
+      // idle task exists in rrq so this loop WILL terminate
       enqueue(&RR_TASKS, deque(&RR_TASKS));
     }
-    Cp = peek(&rr_tasks);
+    Cp = peek(&RR_TASKS);
   }
 
   CurrentSp = Cp->sp;
@@ -166,10 +179,9 @@ static void Dispatch()
 /**
   * This internal kernel function is the "main" driving loop of this full-served
   * model architecture. On OS_Start(), the kernel repeatedly
-  * requests the next user task's next system call and then invokes the
-  * corresponding kernel function on its behalf.
+  * requests the next available user task's execution, and then invokes 
+  * the corresponding kernel function on its behalf.
   *
-  * This is the main loop of our kernel, called by OS_Start().
   */
 static void Next_Kernel_Request()
 {
@@ -185,105 +197,110 @@ static void Next_Kernel_Request()
     // physical stack pointer with this value
     Exit_Kernel();
 
-    // program counter returns here on 
-    // a call to Task_Terminate
+    // program counter returns here on
+    // a call to Task_Terminate after
+    // dispatched function returns
 
     /* save the Cp's stack pointer */
     Cp->sp = CurrentSp;
 
     switch (Cp->request)
     {
-      case TIMER:
-        // Tasks gets interrupted
-        // Reaches here from ISR
-        switch (Cp->type)
+    case TIMER:
+      // Tasks gets interrupted
+      // Reaches here from ISR
+      switch (Cp->type)
+      {
+      case SYSTEM:
+        // nothing to do, pass
+        break;
+      case PERIODIC:
+        // reduce ticks
+        Cp->ticks_remaining--;
+        if (Cp->ticks_remaining <= 0)
         {
-          case SYSTEM: 
-            // nothing to do, pass
-            break;
-          case PERIODIC: 
-            // reduce ticks
-            Cp->ticks_remaining--;
-            if (Cp->ticks_remaining <= 0)
-            {
-              // not good 
-              OS_Abort(-1);
-            }
-            break;
-          case RR:
-            Cp->ticks_remaining--;
-            if (Cp->ticks_remaining <= 0)
-            {
-              // reset ticks and move to back of q
-              Cp->ticks_remaining = 1;
-              enqueue(&RR_TASKS, deque(&RR_TASKS));
-            }
-            break;
+          // not good
+          OS_Abort(-1);
         }
-        if (Cp->state != BLOCKED)
-            Cp->state = READY;
-        Dispatch();
         break;
-
-      case NEXT:
-        // Tasks giving away control voluntarily (i.e. yield)
-        switch (Cp->type)
+      case RR:
+        Cp->ticks_remaining--;
+        if (Cp->ticks_remaining <= 0)
         {
-          case SYSTEM:
-            // dequeue and enqueue
-            enqueue(&SYSTEM_TASKS, deque(&SYSTEM_TASKS));
-            break;
-          case PERIODIC:
-            // dequeue, reset start time, ticks_remaining
-            // and enqueue in order in q
-            deque(&PERIODIC_TASKS);
-            Cp->next_start = Cp->next_start + Cp->period;
-            Cp->ticks_remaining = Cp->wcet;
-            enqueue_in_offset_order(&PERIODIC_TASKS, Cp);
-            break;
-          case RR:
-            // RR task yielding
-            // reset ticks and move to back of q
-            Cp->ticks_remaining = 1;
-            enqueue(&RR_TASKS, deque(&RR_TASKS));
-            break;
+          // reset ticks and move to back of q
+          Cp->ticks_remaining = 1;
+          enqueue(&RR_TASKS, deque(&RR_TASKS));
         }
-        // change state of current process and dispatch
-        if (Cp->state != BLOCKED)
-          Cp->state = READY;
-        // choose new task to run
-        Dispatch();
+        break;
+      }
+      if (Cp->state != BLOCKED)
+        Cp->state = READY;
+      Dispatch();
+      break;
+
+    case NEXT:
+      // Tasks giving away control voluntarily (i.e. yield)
+      switch (Cp->type)
+      {
+      case SYSTEM:
+        // dequeue and enqueue
+        enqueue(&SYSTEM_TASKS, deque(&SYSTEM_TASKS));
         break;
 
-      case NONE:
-        /* NONE could be caused by a timer interrupt */
-        if (Cp->state != BLOCKED)
-          Cp->state = READY;
-        Dispatch();
+      case PERIODIC:
+        // dequeue, reset start time, ticks_remaining
+        // and enqueue in order in q
+        deque(&PERIODIC_TASKS);
+        Cp->start_time = Cp->start_time + Cp->period;
+        Cp->ticks_remaining = Cp->wcet;
+        enqueue_in_offset_order(&PERIODIC_TASKS, Cp);
         break;
 
-      case TERMINATE:
-        /* deallocate all resources used by this task */
-        switch (Cp->type)
-        {
-          case SYSTEM:
-            deque(&SYSTEM_TASKS);
-            break;
-          case PERIODIC:
-            deque(&PERIODIC_TASKS);
-            break;
-          case RR:
-            deque(&RR_TASKS);
-            break;
-        }
-
-        Cp->state = DEAD;
-        Dispatch();
+      case RR:
+        // RR task yielding
+        // reset ticks and move to back of q
+        Cp->ticks_remaining = 1;
+        enqueue(&RR_TASKS, deque(&RR_TASKS));
         break;
+      }
+      // change state of current process and dispatch
+      if (Cp->state != BLOCKED){
+        Cp->state = READY;
+      }
+      // choose new task to run
+      Dispatch();
+      break;
 
-      default:
-        /* Houston! we have a problem here! */
+    case NONE:
+      /* NONE could be caused by a timer interrupt */
+      if (Cp->state != BLOCKED){
+        Cp->state = READY;
+      }
+      Dispatch();
+      break;
+
+    case TERMINATE:
+      /* deallocate all resources used by this task */
+      switch (Cp->type)
+      {
+      case SYSTEM:
+        deque(&SYSTEM_TASKS);
         break;
+      case PERIODIC:
+        deque(&PERIODIC_TASKS);
+        break;
+      case RR:
+        deque(&RR_TASKS);
+        break;
+      }
+
+      Cp->state = DEAD;
+      Dispatch();
+      break;
+
+    default:
+      /* Houston! we have a problem here! */
+      break;
     }
   }
 }

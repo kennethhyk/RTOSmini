@@ -51,7 +51,7 @@ typedef struct process_descriptor
   unsigned char workSpace[WORKSPACE];
   TICK period;
   TICK wcet;
-  TICK next_start;
+  TICK start_time;
   TICK remaining_ticks;
   PROCESS_STATES state;
   voidfuncptr code; // function to be executed as part of task
