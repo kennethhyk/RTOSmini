@@ -1,7 +1,35 @@
-#include "os.h"
+/* pointer to void f(void) */
+typedef void (*voidfuncptr) (void);
 
-// pointer to void f(void) 
-typedef void (*voidfuncptr)(void); 
+/**
+  * This internal kernel function is the context switching mechanism.
+  * It is done in a "funny" way in that it consists two halves: the top half
+  * is called "Exit_Kernel()", and the bottom half is called "Enter_Kernel()".
+  * When kernel calls this function, it starts the top half (i.e., exit). Right in
+  * the middle, "Cp" is activated; as a result, Cp is running and the kernel is
+  * suspended in the middle of this function. When Cp makes a system call,
+  * it enters the kernel via the Enter_Kernel() software interrupt into
+  * the middle of this function, where the kernel was suspended.
+  * After executing the bottom half, the context of Cp is saved and the context
+  * of the kernel is restore. Hence, when this function returns, kernel is active
+  * again, but Cp is not running any more.
+  * (See file "switch.S" for details.)
+  */
+extern void CSwitch();
+extern void Exit_Kernel();    /* this is the same as CSwitch() */
+
+/**
+  * This external function could be implemented in two ways:
+  *  1) as an external function call, which is called by Kernel API call stubs;
+  *  2) as an inline macro which maps the call into a "software interrupt";
+  *       as for the AVR processor, we could use the external interrupt feature,
+  *       i.e., INT0 pin.
+  *  Note: Interrupts are assumed to be disabled upon calling Enter_Kernel().
+  *     This is the case if it is implemented by software interrupt. However,
+  *     as an external function call, it must be done explicitly. When Enter_Kernel()
+  *     returns, then interrupts will be re-enabled by Enter_Kernel().
+  */
+extern void Enter_Kernel();
 
 //========================
 //  RTOS Internal      
@@ -24,7 +52,8 @@ typedef enum priority_levels
 typedef enum process_states {
   DEAD = 0,
   READY,
-  RUNNING
+  RUNNING,
+  BLOCKED
 } PROCESS_STATES;
 
 /**
@@ -56,7 +85,7 @@ typedef struct process_descriptor
   PROCESS_STATES state;
   voidfuncptr code; // function to be executed as part of task
   KERNEL_REQUEST_TYPE request;
-  PD * queue_next; //  next item in q for process
+  struct process_descriptor * next; //  next item in q for process
   PRIORITY_LEVEL priority;
 } PD;
 
@@ -67,46 +96,6 @@ typedef struct queue
   PD *tail;
 } task_queue;
 
-/**
-  * This table contains ALL process descriptors. It doesn't matter what
-  * state a task is in.
-  */
-static PD Process[MAXTHREAD];
-
-/**
-  * The process descriptor of the currently RUNNING task.
-  */
-volatile static PD *Cp;
-
-/** 
-  * Since this is a "full-served" model, the kernel is executing using its own
-  * stack. We can allocate a new workspace for this kernel stack, or we can
-  * use the stack of the "main()" function, i.e., the initial C runtime stack.
-  * (Note: This and the following stack pointers are used primarily by the
-  *   context switching code, i.e., CSwitch(), which is written in assembly
-  *   language.)
-  */
-volatile unsigned char *KernelSp;
-
-/**
-  * This is a "shadow" copy of the stack pointer of "Cp", the currently
-  * running task. During context switching, we need to save and restore
-  * it into the appropriate process descriptor.
-  */
-volatile unsigned char *CurrentSp;
-
-/** index to next task to run */
-volatile static unsigned int NextP;
-
-/** 1 if kernel has been started; 0 otherwise. */
-volatile static unsigned int KernelActive;
-
-/** number of tasks created so far */
-volatile static unsigned int TotalTasks;
-
-// Tick count in order to schedule periodic tasks
-volatile unsigned int num_ticks = 0;
-
 /** task queues for each priority of tasks*/
 task_queue SYSTEM_TASKS;
 task_queue PERIODIC_TASKS;
@@ -114,3 +103,13 @@ task_queue RR_TASKS;
 
 /** application defined main funciton */
 extern void a_main();
+/** timer interrupt init function */
+void init_timer();
+/** Function to kill task */
+void Task_Terminate();
+
+void init_queue(task_queue * q); 
+void enqueue(task_queue * q, PD * task);
+PD * deque(task_queue * q);
+PD * peek(task_queue * q);
+void enqueue_in_offset_order(task_queue * q, PD * task);

@@ -1,6 +1,3 @@
-#include "os.h"
-#include "kernel.h"
-
 void init_queue(task_queue * q) {
     q->head = NULL;
     q->tail = NULL;
@@ -26,7 +23,7 @@ PD * deque(task_queue * q) {
         return p;
     } else if (q->size == 1) {
         p = q->head;
-        q->head = NULL: 
+        q->head = NULL; 
         q->tail = NULL;
         q->size--;
         return p;
@@ -49,12 +46,12 @@ void enqueue_in_offset_order(task_queue * q, PD * task) {
 	} else {
 		PD * p = q->head;
 		PD * prev = NULL;
-		while (p != NULL && p->next_start < task->next_start) {
+		while (p != NULL && p->start_time < task->start_time) {
 			prev = p;
 			p = p->next;
 		}
 
-		if (p_prev == NULL) {
+		if (prev == NULL) {
 			// insert at head
 			q->head = task;
 			task->next = p;
@@ -65,7 +62,7 @@ void enqueue_in_offset_order(task_queue * q, PD * task) {
             q->tail->next = NULL;
 		} else {
 			// insert in middle
-			p_prev->next = task;
+			prev->next = task;
 			task->next = p;
 		}
 

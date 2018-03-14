@@ -1,18 +1,54 @@
+#include "os.h"
 #include <string.h>
 #include <avr/io.h>
-#include <avr/delay.h>
+#include <util/delay.h>
 #include <avr/interrupt.h>
-
 #include "kernel.h"
-#include "os.h"
 #include "queue.c"
 
 // #define DEBUG
+/**
+  * This table contains ALL process descriptors. It doesn't matter what
+  * state a task is in.
+  */
+static PD Process[MAXTHREAD];
+
+/**
+  * The process descriptor of the currently RUNNING task.
+  */
+volatile static PD *Cp;
+
+/** 
+  * Since this is a "full-served" model, the kernel is executing using its own
+  * stack. We can allocate a new workspace for this kernel stack, or we can
+  * use the stack of the "main()" function, i.e., the initial C runtime stack.
+  * (Note: This and the following stack pointers are used primarily by the
+  *   context switching code, i.e., CSwitch(), which is written in assembly
+  *   language.)
+*/
+
+volatile unsigned char *KernelSp;
+
+/** 1 if kernel has been started; 0 otherwise. */
+volatile static unsigned int KernelActive;
+
+/** number of tasks created so far */
+volatile static unsigned int TotalTasks;
+
+// Tick count in order to schedule periodic tasks
+volatile unsigned int num_ticks;
+
+/**
+  * This is a "shadow" copy of the stack pointer of "Cp", the currently
+  * running task. During context switching, we need to save and restore
+  * it into the appropriate process descriptor.
+*/
+volatile unsigned char *CurrentSp;
 
 /**
   *  Create a new task
 */
-PD *static void Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
+static PD * Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
 {
   int x;
   PD *p = NULL;
@@ -77,14 +113,13 @@ void Setup_Function_Stack(PD *p, PID pid, voidfuncptr f)
   p->request = NONE;
   p->state = READY;
   p->next = NULL;
-  p->ticks_remaining = 0;
+  p->remaining_ticks = 0;
 }
 
 // Creates system task and enqueues into SYSTEM_TASKS queue
 PID Task_Create_System(voidfuncptr f, int arg)
 {
-  enum PRIORITY_LEVEL priority = SYSTEM;
-  PD *p = Kernel_Create_Task(f, arg, priority);
+  PD *p = Kernel_Create_Task(f, arg, SYSTEM);
   if (p == NULL)
   {
     return -1; // Too many tasks :(
@@ -97,8 +132,7 @@ PID Task_Create_System(voidfuncptr f, int arg)
 // Creates RR task and enqueues into RR_TASKS queue
 PID Task_Create_RR(voidfuncptr f, int arg)
 {
-  enum PRIORITY_LEVEL priority = RR;
-  PD *p = Kernel_Create_Task(f, arg, priority);
+  PD *p = Kernel_Create_Task(f, arg, RR);
   if (p == NULL)
   {
     return -1; // Too many tasks :(
@@ -112,8 +146,7 @@ PID Task_Create_RR(voidfuncptr f, int arg)
 // PERIODIC_TASKS queue in order of start time
 PID Task_Create_Period(voidfuncptr f, int arg, TICK period, TICK wcet, TICK offset)
 {
-  enum PRIORITY_LEVEL priority = PERIODIC;
-  PD *p = Kernel_Create_Task(f, arg, priority);
+  PD *p = Kernel_Create_Task(f, arg, PERIODIC);
   if (p == NULL)
   {
     return -1; // Too many tasks :(
@@ -125,7 +158,7 @@ PID Task_Create_Period(voidfuncptr f, int arg, TICK period, TICK wcet, TICK offs
   p->period = period;
   p->wcet = wcet;
   p->start_time = num_ticks + offset;
-  p->ticks_remaining = wcet;
+  p->remaining_ticks = wcet;
 
   return p->pid;
 }
@@ -209,26 +242,26 @@ static void Next_Kernel_Request()
     case TIMER:
       // Tasks gets interrupted
       // Reaches here from ISR
-      switch (Cp->type)
+      switch (Cp->priority)
       {
       case SYSTEM:
         // nothing to do, pass
         break;
       case PERIODIC:
         // reduce ticks
-        Cp->ticks_remaining--;
-        if (Cp->ticks_remaining <= 0)
+        Cp->remaining_ticks--;
+        if (Cp->remaining_ticks <= 0)
         {
           // not good
           OS_Abort(-1);
         }
         break;
       case RR:
-        Cp->ticks_remaining--;
-        if (Cp->ticks_remaining <= 0)
+        Cp->remaining_ticks--;
+        if (Cp->remaining_ticks <= 0)
         {
           // reset ticks and move to back of q
-          Cp->ticks_remaining = 1;
+          Cp->remaining_ticks = 1;
           enqueue(&RR_TASKS, deque(&RR_TASKS));
         }
         break;
@@ -240,7 +273,7 @@ static void Next_Kernel_Request()
 
     case NEXT:
       // Tasks giving away control voluntarily (i.e. yield)
-      switch (Cp->type)
+      switch (Cp->priority)
       {
       case SYSTEM:
         // dequeue and enqueue
@@ -248,18 +281,18 @@ static void Next_Kernel_Request()
         break;
 
       case PERIODIC:
-        // dequeue, reset start time, ticks_remaining
+        // dequeue, reset start time, remaining_ticks
         // and enqueue in order in q
         deque(&PERIODIC_TASKS);
         Cp->start_time = Cp->start_time + Cp->period;
-        Cp->ticks_remaining = Cp->wcet;
+        Cp->remaining_ticks = Cp->wcet;
         enqueue_in_offset_order(&PERIODIC_TASKS, Cp);
         break;
 
       case RR:
         // RR task yielding
         // reset ticks and move to back of q
-        Cp->ticks_remaining = 1;
+        Cp->remaining_ticks = 1;
         enqueue(&RR_TASKS, deque(&RR_TASKS));
         break;
       }
@@ -281,7 +314,7 @@ static void Next_Kernel_Request()
 
     case TERMINATE:
       /* deallocate all resources used by this task */
-      switch (Cp->type)
+      switch (Cp->priority)
       {
       case SYSTEM:
         deque(&SYSTEM_TASKS);
@@ -326,9 +359,9 @@ void OS_Init()
     Process[x].state = DEAD;
   }
 
-  queue_init(&system_tasks);
-  queue_init(&periodic_tasks);
-  queue_init(&rr_tasks);
+  init_queue(&SYSTEM_TASKS);
+  init_queue(&PERIODIC_TASKS);
+  init_queue(&RR_TASKS);
 }
 
 /**
@@ -367,7 +400,7 @@ void Task_Terminate()
   Cp->request = TERMINATE;
   Cp->state = DEAD;
   // Process[Cp->pid].state = DEAD;
-  Tasks--;
+  TotalTasks--;
   Enter_Kernel();
   /* never returns here! */
 }
@@ -441,8 +474,8 @@ void Pong()
 void main()
 {
   OS_Init();
-  Task_Create(Pong);
-  Task_Create(Ping);
+  // Task_Create(Pong);
+  // Task_Create(Ping);
   // DDRB = 0b11000000;
   OS_Start();
 }
