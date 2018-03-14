@@ -113,3 +113,4 @@ void enqueue(task_queue * q, PD * task);
 PD * deque(task_queue * q);
 PD * peek(task_queue * q);
 void enqueue_in_offset_order(task_queue * q, PD * task);
+void Setup_Function_Stack(PD *p, PID pid, voidfuncptr f);

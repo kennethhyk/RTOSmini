@@ -16,7 +16,7 @@ static PD Process[MAXTHREAD];
 /**
   * The process descriptor of the currently RUNNING task.
   */
-volatile static PD *Cp;
+static volatile PD *Cp;
 
 /** 
   * Since this is a "full-served" model, the kernel is executing using its own
@@ -30,10 +30,10 @@ volatile static PD *Cp;
 volatile unsigned char *KernelSp;
 
 /** 1 if kernel has been started; 0 otherwise. */
-volatile static unsigned int KernelActive;
+static volatile unsigned int KernelActive;
 
 /** number of tasks created so far */
-volatile static unsigned int TotalTasks;
+static volatile unsigned int TotalTasks;
 
 // Tick count in order to schedule periodic tasks
 volatile unsigned int num_ticks;
@@ -43,7 +43,7 @@ volatile unsigned int num_ticks;
   * running task. During context switching, we need to save and restore
   * it into the appropriate process descriptor.
 */
-volatile unsigned char *CurrentSp;
+unsigned char *CurrentSp;
 
 /**
   *  Create a new task
