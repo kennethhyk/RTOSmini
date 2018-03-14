@@ -63,22 +63,29 @@ ISR(TIMER1_COMPA_vect)
 /**
   *  Create a new task
 */
-static void Kernel_Create_Task(voidfuncptr f)
+PD *static void Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
 {
   int x;
+  PD *p = NULL;
 
   if (TotalTasks == MAXTHREAD)
-    return; /* Too many tasks! */
+    return p; // Too many tasks!
 
-  /* find a DEAD PD that we can use  */
+  // find a DEAD PD that we can use
   for (x = 0; x < MAXTHREAD; x++)
   {
     if (Process[x].state == DEAD)
-      break;
+    {
+      p = &(Process[x]);
+    }
   }
 
-  ++TotalTasks;
-  Setup_Function_Stack(&(Process[x]), f);
+  TotalTasks++;
+  Setup_Function_Stack(p, f);
+
+  p->priority = level;
+  p->arg = arg
+  return p;
 }
 
 /**
@@ -115,11 +122,55 @@ void Setup_Function_Stack(PD *p, voidfuncptr f)
   //Place stack pointer at top of stack
   sp = sp - 34;
 
+  p->pid = x;
   p->sp = sp;  /* stack pointer into the "workSpace" */
   p->code = f; /* function to be executed as a task */
   p->request = NONE;
-
   p->state = READY;
+  p->next = NULL;
+}
+
+PID Task_Create_System(voidfuncptr f, int arg)
+{
+  enum PRIORITY_LEVEL priority = SYSTEM;
+  PD *p = Kernel_Create_Task(f, arg, priority);
+  if (p == NULL) return -1; // Too many tasks :(
+
+  enqueue(&SYSTEM_TASKS, p);
+  return p->pid;
+}
+
+PID Task_Create_RR(voidfuncptr f, int arg)
+{
+  enum PRIORITY_LEVEL priority = RR;
+  PD *p = Kernel_Create_Task(f, arg, priority);
+  if (p == NULL) return -1; // Too many tasks :(
+
+  enqueue(&RR_TASKS, p);
+  return p->pid;
+}
+
+PID Task_Create_Period(voidfuncptr f, int arg, TICK period, TICK wcet, TICK offset)
+{
+  enum PRIORITY_LEVEL priority = PERIODIC;
+  PD *p = Kernel_Create_Task(f, arg, priority);
+  if (p == NULL) return -1; // Too many tasks :(
+
+  enqueue(&PERIODIC_TASKS, p);
+  
+  // set periodic task specific attributes 
+  p->period = period;
+  p->wcet = wcet;
+  p->offset = offset;
+  return p->pid;
+}
+
+int  Task_GetArg(void){
+  return Cp->arg;
+}
+
+PID  Task_Pid(void){
+  return Cp->pid;
 }
 
 /**
