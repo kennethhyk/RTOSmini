@@ -1,11 +1,9 @@
 #include <string.h>
-#include <stdio.h>
 #include <avr/io.h>
-#include <util/delay.h>
+#include <avr/delay.h>
 #include <avr/interrupt.h>
 #include "os.h"
 #include "ipc.h"
-#include "avr_console.h"
 /**
  * \file active.c
  * \brief A Skeleton Implementation of an RTOS
@@ -117,6 +115,8 @@ typedef struct ProcessDescriptor
    PROCESS_STATES state;
    voidfuncptr  code;   /* function to be executed as a task */
    KERNEL_REQUEST_TYPE request;
+   PID pid;
+   IPC_MAILBOX mailbox;
 } PD;
 
 /**
@@ -312,28 +312,26 @@ static void Next_Kernel_Request()
        Cp->sp = CurrentSp;
 
        switch(Cp->request){
-           case CREATE:
+       case CREATE:
            Kernel_Create_Task( Cp->code );
            break;
-           case NEXT:
-           case NONE:
+       case NEXT:
+	     case NONE:
            /* NONE could be caused by a timer interrupt */
-           Cp->state = READY;
-           Dispatch();
-           break;
-           case TERMINATE:
+          Cp->state = READY;
+          Dispatch();
+          break;
+       case TERMINATE:
           /* deallocate all resources used by this task */
-           Cp->state = DEAD;
-           Dispatch();
-           break;
-           default:
+          Cp->state = DEAD;
+          Dispatch();
+          break;
+       default:
           /* Houston! we have a problem here! */
-           break;
+          break;
        }
-   } 
+    } 
 }
-
-
 /*================
   * RTOS  API  and Stubs
   *================
@@ -386,9 +384,11 @@ void Task_Create( voidfuncptr f)
      Disable_Interrupt();
      Cp ->request = CREATE;
      Cp->code = f;
+     q_init(&Cp->mailbox.message_q);
      Enter_Kernel();
    } else { 
       /* call the RTOS function directly */
+      q_init(&Cp->mailbox.message_q);
       Kernel_Create_Task( f );
    }
 }
@@ -419,6 +419,60 @@ void Task_Terminate()
    }
 }
 
+void Msg_Send( PID  id, MTYPE t, unsigned int *v ) {
+    //test init
+    Process[id].pid = id;
+    //find corresponding PD
+    int recv_process;
+    printf("SENDING TO %d\n", id);
+    printf("CHECKING RECIEVER STATUS\n");
+    for(int i = 0 ;i < 4; i++) {
+      if(id == Process[i].pid) {
+          recv_process = i;
+          break;
+      }
+    }
+    printf("ENTERING SEND BLOCK\n");
+    while(Process[recv_process].mailbox.status != 1){
+      //send block
+      Task_Next();
+    }
+    printf("LEAVING SEND BLOCK\n");
+    // q_insert(Cp->pid, 9, &Process[recv_process].mailbox.message_q);
+    
+    printf("just inserted %d\n" ,q_removeData(&Process[recv_process].mailbox.message_q));
+    // for(int j = 0;j < 6;j++){
+    //   int mg = q_peek(&Process[j].mailbox.message_q);
+    //   printf("%d msg: %d\n", j, mg);
+    // }
+    printf("ENTERING RECV BLOCK\n");
+    Task_Next();
+    while(1){
+        //recv block
+    }
+}
+
+PID  Msg_Recv( MASK m,           unsigned int *v ) {
+  Cp->mailbox.status = 1;
+  while(q_size(&(Cp->mailbox.message_q)) == 0) {
+    // recv block
+    printf("recv block\n");
+    Task_Next();
+  }
+  printf("leaving recv block\n");
+  int m2 = q_removeData(&Cp->mailbox.message_q);
+  printf("i recieved %d\n", m2);
+
+}
+
+void Msg_Rply( PID  id,          unsigned int r ) {
+
+}
+
+void Msg_ASend( PID  id, MTYPE t, unsigned int v ) {
+
+}
+
 /*============
   * A Simple Test 
   *============
@@ -431,10 +485,11 @@ void Task_Terminate()
 void Ping() 
 {
   for(;;){
+    Msg_Send( 1, 'g', "hi" );
   	// PORTB = 0b10000000;
-    PORTB = 0b00000011;
-    _delay_ms(1000);
-    Task_Next();
+    // _delay_ms(100);
+    // Task_Next();
+    // PORTB = 0b00000000;
   }
 }
 
@@ -446,12 +501,19 @@ void Ping()
 void Pong() 
 {
   for(;;){
+    Cp->mailbox.status = 1;
+    if(q_size(&(Cp->mailbox.message_q)) != 0) {
+      printf("my msg: %d\n",q_removeData(&Cp->mailbox.message_q));
+    }
+    Task_Next();
+    // Msg_Recv( 'g', "hi");
+    // printf("recieved: %d\n",q_removeData( &Process[1].mailbox.message_q));
+    // Task_Next();
     // PORTB = 0b00000000;
     // _delay_ms(100);
-    PORTB = 0b01000000;
-    _delay_ms(1000);
-    Task_Next();
-}
+    // Task_Next();
+    // PORTB = 0b10000000;
+  }
 }
 
 
@@ -461,15 +523,15 @@ void Pong()
   */
 void main() 
 {
+  uart_init();
+  stdout = &uart_output;
+  stdin  = &uart_input;
    OS_Init();
-   // Task_Create( Pong );
-   // Task_Create( Ping );
-   DDRB = 0b11111111;
-   uart_init();
-   stdout = &uart_output;
-   stdin  = &uart_input;  
-   hi();
+   Task_Create( Ping );
+   Task_Create( Pong );
+   DDRB = 0b11000000;
    // timer1_init();
+    // hi();  
    OS_Start();
 }
 

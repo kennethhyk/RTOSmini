@@ -1,10 +1,11 @@
 /* Last modified: MHMC Jan/30/2018 */
 #ifndef _OS_H_  
 #define _OS_H_  
-
+   
 #define MAXTHREAD     16       
 #define WORKSPACE     256   // in bytes, per THREAD
 #define MSECPERTICK   10   // resolution of a system TICK in milliseconds
+#define MAXPROCESS   4
 
 #ifndef NULL
 #define NULL          0   /* undefined */
@@ -116,6 +117,7 @@ void Msg_ASend( PID  id, MTYPE t, unsigned int v );
   */
 unsigned int Now();  // number of milliseconds since the RTOS boots.
 
+
 /*==================================================================  
  *        S T A N D A R D   I N L I N E    P R O C E D U R E S  
  *==================================================================  
@@ -140,4 +142,5 @@ unsigned int Now();  // number of milliseconds since the RTOS boots.
  *  "a_main()" is a parameterless function defined by the application, which will create all other
  *  application tasks as necessary.
  */
+
 #endif /* _OS_H_ */

@@ -6,24 +6,29 @@
 #define MAX 6
 
 typedef struct {
-	int intArray[MAX];
+	PID pid;
+	int msg;
+} Msg_Des;
+
+typedef struct {
+	int msgArray[MAX];
+	// PID pidArray[MAX];
 	int front;
 	int rear;
 	int itemCount;
 } Queue;
 
 void q_init(Queue *q){
-	// memset(q->intArray, 0, sizeof(int)*MAX);
-	for(int i = 0; i < 6; i++){
-    	q->intArray[i] = 0;
-    }
+	printf("initializing");
+	memset(q->msgArray, 0, sizeof(int)*MAX);
+	// memset(q->pidArray, 0, sizeof(PID)*MAX);
 	q->front = 0;
 	q->rear = -1;
 	q->itemCount = 0;
 }
 
 int q_peek(Queue *q) {
-	return q->intArray[q->front];
+	return q->msgArray[q->front];
 }
 
 bool q_isEmpty(Queue *q) {
@@ -38,20 +43,20 @@ int q_size(Queue *q) {
 	return q->itemCount;
 }  
 
-void q_insert(int data, Queue *q) {
-	printf("q inserting %d\n", data);
+void q_insert(PID pid, int msg, Queue *q) {
 	if(!q_isFull(q)) {
 		if(q->rear == MAX-1) {
 			q->rear = -1;
 		}
-		q->intArray[++(q->rear)] = data;
-		printf("array at %d: %d\n", q->rear,q->intArray[q->rear]);
+		// q->pidArray[++(q->rear)] = pid;
+		q->msgArray[++(q->rear)] = msg;
+		// printf("inserting %d %d\n", q->pidArray[(q->rear)], q->msgArray[(q->rear)]);
 		q->itemCount++;
 	}
 }
 
 int q_removeData(Queue *q) {
-	int data = q->intArray[(q->front)++];
+	int data = q->msgArray[(q->front)++];
 
 	if(q->front == MAX) {
 		q->front = 0;

@@ -10,6 +10,8 @@
 #endif
 #include <util/setbaud.h>
 
+/* http://www.cs.mun.ca/~rod/Winter2007/4723/notes/serial/serial.html */
+
 void uart_init(void) {
     UBRR0H = UBRRH_VALUE;
     UBRR0L = UBRRL_VALUE;
