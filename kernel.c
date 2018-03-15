@@ -1,12 +1,15 @@
+#include <stdbool.h>
 #include "os.h"
 #include <string.h>
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>
+#include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
 
-// #define DEBUG
+#define DEBUG 1
+
 /**
   * This table contains ALL process descriptors. It doesn't matter what
   * state a task is in.
@@ -14,7 +17,7 @@
 static PD Process[MAXTHREAD];
 
 /**
-  * The process descriptor of the currently RUNNING task.
+  * The process descriptor of the running task
   */
 static volatile PD *Cp;
 
@@ -138,6 +141,7 @@ PID Task_Create_RR(voidfuncptr f, int arg)
     return -1; // Too many tasks :(
   }
 
+  p->remaining_ticks = 1;
   enqueue(&RR_TASKS, p);
   return p->pid;
 }
@@ -159,7 +163,6 @@ PID Task_Create_Period(voidfuncptr f, int arg, TICK period, TICK wcet, TICK offs
   p->wcet = wcet;
   p->start_time = num_ticks + offset;
   p->remaining_ticks = wcet;
-
   return p->pid;
 }
 
@@ -185,7 +188,7 @@ static void Dispatch()
   }
 
   // Look through q's and pick task to run according to q precedence
-  if (SYSTEM_TASKS.head && peek(&SYSTEM_TASKS)->state != BLOCKED)
+  if ((SYSTEM_TASKS.size > 0) && (peek(&SYSTEM_TASKS)->state != BLOCKED))
   {
     Cp = peek(&SYSTEM_TASKS);
   }
@@ -263,7 +266,8 @@ static void Next_Kernel_Request()
           // reset ticks and move to back of q
           Cp->remaining_ticks = 1;
           enqueue(&RR_TASKS, deque(&RR_TASKS));
-        }
+          // toggle_LED_B6();
+         }
         break;
       }
       if (Cp->state != BLOCKED)
@@ -327,7 +331,6 @@ static void Next_Kernel_Request()
         break;
       }
 
-      Cp->state = DEAD;
       Dispatch();
       break;
 
@@ -370,10 +373,11 @@ void OS_Init()
 void OS_Start()
 {
   OS_DI();
-  if ((!KernelActive) && (TotalTasks > 0))
+  if ((KernelActive == 0) && (TotalTasks > 0))
   {
     init_timer();
     // Select a free task and dispatch it
+    
     KernelActive = 1;
     Next_Kernel_Request();
     /* NEVER RETURNS!!! */
@@ -399,7 +403,6 @@ void Task_Terminate()
   OS_DI();
   Cp->request = TERMINATE;
   Cp->state = DEAD;
-  // Process[Cp->pid].state = DEAD;
   TotalTasks--;
   Enter_Kernel();
   /* never returns here! */
@@ -407,28 +410,44 @@ void Task_Terminate()
 
 void idle_func()
 {
-  while (1)
-  {
-    ;
+  while(1){
+    toggle_LED_idle();
+    _delay_ms(500);
+    toggle_LED_idle();
   }
 }
 
 void init_timer()
 {
-  TCCR1A = 0;
-  TCCR1B = 0;
-  OCR1A = 15999;
+  //Clear timer config.
+  TCCR1A = 0;// set entire TCCR1A register to 0
+  TCCR1B = 0;// same for TCCR1B
+
+  // OCR1A = 15999;       // for 10ms
+  // turn on CTC mode
   TCCR1B |= (1 << WGM12);
-  TCCR1B |= (1 << CS00);
+  // TCCR1B |= (1 << CS00); // for 10ms
+  // TIMSK1 |= (1 << OCIE1A); // for 10ms
+
+// for 1s
+  TCNT1  = 0;//initialize counter value to 0
+  // set compare match register for 1hz increments
+  OCR1A = 15624;// = (16*10^6) / (1*1024) - 1 (must be <65536)
+  // Set CS10 and CS12 bits for 1024 prescaler
+  TCCR1B |= (1 << CS12) | (1 << CS10);  
+// for 1s
+
+  // enable timer compare interrupt
   TIMSK1 |= (1 << OCIE1A);
-  OS_EI();
+  // OS_EI();
 }
 
 ISR(TIMER1_COMPA_vect)
 {
+  toggle_LED_B3();
   num_ticks++;
   OS_DI();
-  Cp->state = TIMER;
+  Cp->request = TIMER;
   Enter_Kernel();
 }
 
@@ -443,13 +462,9 @@ ISR(TIMER1_COMPA_vect)
   */
 void Ping()
 {
-  for (;;)
-  {
-    // PORTB = 0b10000000;
-    // _delay_ms(100);
-    // Task_Next();
-    PORTB = 0b00000000;
-  }
+    toggle_LED_B6();
+    _delay_ms(2000);
+    toggle_LED_B6();
 }
 
 /**
@@ -458,12 +473,27 @@ void Ping()
   */
 void Pong()
 {
-  for (;;)
-  {
+  // printf("Hi");
+  // for (;;)
+  // {
     // PORTB = 0b00000000;
     // _delay_ms(100);
     // Task_Next();
-    PORTB = 0b10000000;
+  // toggle_LED_B6();
+    // PORTB = 0b11111111;
+  // }
+    toggle_LED_idle();
+    _delay_ms(3000);
+    toggle_LED_idle();
+
+}
+
+void OS_Abort(unsigned int error)
+{
+  OS_DI();
+  while(1){
+    toggle_LED_B3();
+    _delay_ms(500);
   }
 }
 
@@ -473,9 +503,29 @@ void Pong()
   */
 void main()
 {
+  init_LED_idle();
+  init_LED_B3();
+  init_LED_B5();
+  init_LED_B6();
+
+  // for(;;){
+  //   // idle_func();
+  //   // toggle_LED_B6();
+  //   // _delay_ms(500);
+  //   // toggle_LED_B5();
+  //   // _delay_ms(500);
+  //   // // toggle_LED_idle();
+  //   // _delay_ms(500);
+  // }
+  
+  // clear memory and prepare queues
   OS_Init();
-  // Task_Create(Pong);
-  // Task_Create(Ping);
-  // DDRB = 0b11000000;
+
+  Task_Create_RR(idle_func, 0);
+  Task_Create_System(Ping, 0);
+  // idle_func();
+  // Task_Create_RR(Pong, 0);
+  // Task_Create_RR(Pong, 0);
   OS_Start();
+
 }

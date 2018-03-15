@@ -50,7 +50,7 @@ typedef enum priority_levels
   *  This is the set of states that a task can be in at any given time.
   */
 typedef enum process_states {
-  DEAD = 0,
+  DEAD = 10,
   READY,
   RUNNING,
   BLOCKED
@@ -60,7 +60,7 @@ typedef enum process_states {
   * This is the set of kernel requests, i.e., a request code for each system call.
   */
 typedef enum kernel_request_type {
-  NONE = 0,
+  NONE = 20,
   CREATE,
   NEXT,
   TERMINATE,
