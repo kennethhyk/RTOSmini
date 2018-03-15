@@ -2,10 +2,10 @@
 #ifndef _OS_H_  
 #define _OS_H_  
 
-#ifndef NULL
-#define NULL          0   /* undefined */
-#endif
-#define MAXTHREAD     17    // Incremented by 1 to account for idle_task       
+// #ifndef NULL
+// #define NULL          0   /* undefined */
+// #endif
+#define MAXTHREAD     16    // Incremented by 1 to account for idle_tacwk       
 #define WORKSPACE     256   // in bytes, per THREAD
 #define MSECPERTICK   10   // resolution of a system TICK in milliseconds
 
