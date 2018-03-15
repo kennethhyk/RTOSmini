@@ -114,3 +114,11 @@ PD * deque(task_queue * q);
 PD * peek(task_queue * q);
 void enqueue_in_offset_order(task_queue * q, PD * task);
 void Setup_Function_Stack(PD *p, PID pid, voidfuncptr f);
+
+/*   
+* inline assembly code to disable/enable maskable interrupts   
+* (N.B. Use with caution.)  
+*/  
+
+#define OS_EI()    asm(" sei ")  /* disable all interrupts */
+#define OS_DI()    asm(" cli ")  /* enable all interrupts */
