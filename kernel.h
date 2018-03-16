@@ -1,3 +1,4 @@
+
 /* pointer to void f(void) */
 typedef void (*voidfuncptr) (void);
 
@@ -55,7 +56,7 @@ typedef enum RECV_TYPE {
 
 typedef struct Msg_Des{
     PID pid;
-    MSG_TYPE msg_typemsg_type;
+    MSG_TYPE msg_type;
     RECV_TYPE recv_type;
     int msg;
     struct Msg_Des *next;
