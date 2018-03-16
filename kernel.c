@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <stdbool.h>
 #include "os.h"
 #include <string.h>
@@ -7,6 +8,7 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
+#include "avr_console.h"
 
 #define DEBUG 1
 
@@ -135,6 +137,7 @@ PID Task_Create_System(voidfuncptr f, int arg)
 // Creates RR task and enqueues into RR_TASKS queue
 PID Task_Create_RR(voidfuncptr f, int arg)
 {
+  printf("Creating rr tasks;"); 
   PD *p = Kernel_Create_Task(f, arg, RR);
   if (p == NULL)
   {
@@ -143,6 +146,7 @@ PID Task_Create_RR(voidfuncptr f, int arg)
 
   p->remaining_ticks = 1;
   enqueue(&RR_TASKS, p);
+  printf("size of rrq: %d\n", RR_TASKS.size);
   return p->pid;
 }
 
@@ -191,6 +195,7 @@ static void Dispatch()
   if ((SYSTEM_TASKS.size > 0) && (peek(&SYSTEM_TASKS)->state != BLOCKED))
   {
     Cp = peek(&SYSTEM_TASKS);
+    // toggle_LED_B3();
   }
   // periodic tasks are sorted by start time, so only looking at head suffices
   else if (PERIODIC_TASKS.head && num_ticks >= peek(&PERIODIC_TASKS)->start_time)
@@ -198,6 +203,7 @@ static void Dispatch()
     Cp = peek(&PERIODIC_TASKS);
   }
   else if (RR_TASKS.size > 0)
+  // else
   {
     // go through the q and find
     while (peek(&RR_TASKS)->state == BLOCKED)
@@ -206,6 +212,10 @@ static void Dispatch()
       enqueue(&RR_TASKS, deque(&RR_TASKS));
     }
     Cp = peek(&RR_TASKS);
+  }
+  else {
+    printf("HOUSTON, WE HAVE A PROBLEM!");
+    OS_Abort(1);
   }
 
   CurrentSp = Cp->sp;
@@ -266,12 +276,14 @@ static void Next_Kernel_Request()
           // reset ticks and move to back of q
           Cp->remaining_ticks = 1;
           enqueue(&RR_TASKS, deque(&RR_TASKS));
-          // toggle_LED_B6();
          }
         break;
       }
-      if (Cp->state != BLOCKED)
+
+      if (Cp->state != BLOCKED){
         Cp->state = READY;
+      }
+
       Dispatch();
       break;
 
@@ -328,6 +340,7 @@ static void Next_Kernel_Request()
         break;
       case RR:
         deque(&RR_TASKS);
+        // toggle_LED_B6();
         break;
       }
 
@@ -401,6 +414,7 @@ void Task_Next()
 void Task_Terminate()
 {
   OS_DI();
+  // memset(Cp, 0, sizeof(PD));
   Cp->request = TERMINATE;
   Cp->state = DEAD;
   TotalTasks--;
@@ -411,9 +425,9 @@ void Task_Terminate()
 void idle_func()
 {
   while(1){
+    printf("idle\n");
     toggle_LED_idle();
-    _delay_ms(500);
-    toggle_LED_idle();
+    _delay_ms(1000);
   }
 }
 
@@ -457,42 +471,39 @@ ISR(TIMER1_COMPA_vect)
   */
 
 /**
+* A cooperative "Pong" task.
+* Added testing code for LEDs.
+*/
+void Pong()
+{ 
+  printf("started pong\n");
+  toggle_LED_B6();
+  _delay_ms(4000);
+  toggle_LED_B6();
+  printf("finished pong\n");
+}
+
+/**
   * A cooperative "Ping" task.
   * Added testing code for LEDs.
   */
 void Ping()
 {
-    toggle_LED_B6();
-    _delay_ms(2000);
-    toggle_LED_B6();
+  // Task_Create_System(Pong);
+  printf("Ping\n");
+  toggle_LED_B5();
+  _delay_ms(2000);
+  toggle_LED_B5();
+  Task_Create_RR(Pong, 0); 
 }
 
-/**
-  * A cooperative "Pong" task.
-  * Added testing code for LEDs.
-  */
-void Pong()
-{
-  // printf("Hi");
-  // for (;;)
-  // {
-    // PORTB = 0b00000000;
-    // _delay_ms(100);
-    // Task_Next();
-  // toggle_LED_B6();
-    // PORTB = 0b11111111;
-  // }
-    toggle_LED_idle();
-    _delay_ms(3000);
-    toggle_LED_idle();
 
-}
 
 void OS_Abort(unsigned int error)
 {
   OS_DI();
   while(1){
-    toggle_LED_B3();
+    // toggle_LED_B3();
     _delay_ms(500);
   }
 }
@@ -503,29 +514,38 @@ void OS_Abort(unsigned int error)
   */
 void main()
 {
+
+  uart_init();
+  stdout = &uart_output;
+  stdin = &uart_input;
+
   init_LED_idle();
-  init_LED_B3();
   init_LED_B5();
   init_LED_B6();
+  init_LED_B3();
 
+  // test lights
   // for(;;){
-  //   // idle_func();
-  //   // toggle_LED_B6();
-  //   // _delay_ms(500);
-  //   // toggle_LED_B5();
-  //   // _delay_ms(500);
-  //   // // toggle_LED_idle();
-  //   // _delay_ms(500);
+    // toggle_LED_B6();
+    // _delay_ms(500);
+    // toggle_LED_B5();
+    // _delay_ms(500);
+    // toggle_LED_B3();
+    // _delay_ms(500);
+    // toggle_LED_idle();
+    // _delay_ms(500);
   // }
   
   // clear memory and prepare queues
   OS_Init();
-
-  Task_Create_RR(idle_func, 0);
+  
+  // Task_Create_RR(idle_func, 0);
+  // deque(&RR_TASKS);
   Task_Create_System(Ping, 0);
-  // idle_func();
-  // Task_Create_RR(Pong, 0);
-  // Task_Create_RR(Pong, 0);
+  // Task_Create_System(Pong, 0);
+  // // idle_func();
+  // // Task_Create_RR(Pong, 0);
+  // // Task_Create_RR(Pong, 0);
   OS_Start();
 
 }

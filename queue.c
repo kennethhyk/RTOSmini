@@ -2,6 +2,7 @@ void init_queue(task_queue * q) {
     q->head = NULL;
     q->tail = NULL;
     q->size = 0;
+    return;
 }
 
 void enqueue(task_queue * q, PD * task) {
@@ -14,6 +15,8 @@ void enqueue(task_queue * q, PD * task) {
     q->tail = task;
     task->next = NULL;
     q->size++;
+    printf("Enqueued. rrq size: %d\n", q->size);
+    return;
 }
 
 PD * deque(task_queue * q) {
@@ -26,13 +29,14 @@ PD * deque(task_queue * q) {
         q->head = NULL; 
         q->tail = NULL;
         q->size--;
-        return p;
     } else {
         p = q->head;
         q->head = p->next;
         q->size--;
-        return p;
     }
+
+    printf("Dequed. rrq size: %d\n", q->size);
+    return p;
 }
 
 PD * peek(task_queue * q) {
@@ -67,6 +71,7 @@ void enqueue_in_offset_order(task_queue * q, PD * task) {
 		}
 
         q->size++;
+        printf("Enqueued. rrq size: %d\n", q->size);
         return;
 	}
 }
