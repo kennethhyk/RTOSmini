@@ -12,6 +12,9 @@
 
 #define DEBUG 1
 
+void Ping();
+void Pong();
+
 /**
   * This table contains ALL process descriptors. It doesn't matter what
   * state a task is in.
@@ -160,12 +163,13 @@ PID Task_Create_Period(voidfuncptr f, int arg, TICK period, TICK wcet, TICK offs
     return -1; // Too many tasks :(
   }
 
-  enqueue_in_offset_order(&PERIODIC_TASKS, p);
+  enqueue_in_start_order(&PERIODIC_TASKS, p);
 
   // set periodic task specific attributes
   p->period = period;
   p->wcet = wcet;
   p->start_time = num_ticks + offset;
+  p->next_start = p->start_time + period;
   p->remaining_ticks = wcet;
   return p->pid;
 }
@@ -336,7 +340,14 @@ static void Next_Kernel_Request()
         deque(&SYSTEM_TASKS);
         break;
       case PERIODIC:
+        // periodic tasks run forever
+        // so reset in q
         deque(&PERIODIC_TASKS);
+        Cp->start_time = Cp->next_start;
+        Cp->next_start += Cp->period;
+        Cp->state = READY;
+        Cp->request = NONE;
+        enqueue_in_start_order(&PERIODIC_TASKS, Cp);
         break;
       case RR:
         deque(&RR_TASKS);
@@ -465,39 +476,6 @@ ISR(TIMER1_COMPA_vect)
   Enter_Kernel();
 }
 
-/*============
-  * A Simple Test 
-  *============
-  */
-
-/**
-* A cooperative "Pong" task.
-* Added testing code for LEDs.
-*/
-void Pong()
-{ 
-  printf("started pong\n");
-  toggle_LED_B6();
-  _delay_ms(4000);
-  toggle_LED_B6();
-  printf("finished pong\n");
-}
-
-/**
-  * A cooperative "Ping" task.
-  * Added testing code for LEDs.
-  */
-void Ping()
-{
-  // Task_Create_System(Pong);
-  printf("Ping\n");
-  toggle_LED_B5();
-  _delay_ms(2000);
-  toggle_LED_B5();
-  Task_Create_RR(Pong, 0); 
-}
-
-
 
 void OS_Abort(unsigned int error)
 {
@@ -506,6 +484,26 @@ void OS_Abort(unsigned int error)
     // toggle_LED_B3();
     _delay_ms(500);
   }
+}
+
+void Pong()
+{ 
+  printf("started pong\n");
+  toggle_LED_B6();
+  _delay_ms(4000);
+  toggle_LED_B6();
+  printf("finished pong\n");
+  // Task_Create_System(Ping, 0);
+}
+
+void Ping()
+{
+  printf("Started Ping\n");
+  toggle_LED_B5();
+  _delay_ms(2000);
+  toggle_LED_B5();
+  // Task_Create_RR(Pong, 0);
+  printf("Finished Ping");
 }
 
 /**
@@ -535,15 +533,15 @@ void main()
     // toggle_LED_idle();
     // _delay_ms(500);
   // }
-  
+
+  printf("=========\n");
   // clear memory and prepare queues
   OS_Init();
   
-  // Task_Create_RR(idle_func, 0);
+  Task_Create_RR(idle_func, 0);
   // deque(&RR_TASKS);
   Task_Create_System(Ping, 0);
   // Task_Create_System(Pong, 0);
-  // // idle_func();
   // // Task_Create_RR(Pong, 0);
   // // Task_Create_RR(Pong, 0);
   OS_Start();

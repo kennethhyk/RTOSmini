@@ -82,6 +82,7 @@ typedef struct process_descriptor
   TICK wcet;
   TICK start_time;
   TICK remaining_ticks;
+  TICK next_start;
   PROCESS_STATES state;
   voidfuncptr code; // function to be executed as part of task
   KERNEL_REQUEST_TYPE request;

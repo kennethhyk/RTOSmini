@@ -43,7 +43,7 @@ PD * peek(task_queue * q) {
 	return q->head;
 }
 
-void enqueue_in_offset_order(task_queue * q, PD * task) {
+void enqueue_in_start_order(task_queue * q, PD * task) {
 	if (q->size == 0) {
 		enqueue(q, task);
         return;
