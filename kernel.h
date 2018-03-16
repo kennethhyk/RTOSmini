@@ -1,4 +1,3 @@
-#include "ipc.h"
 /* pointer to void f(void) */
 typedef void (*voidfuncptr) (void);
 

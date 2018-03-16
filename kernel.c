@@ -499,7 +499,14 @@ void Msg_Rply( PID  id, unsigned int r ) {
 }
 
 void Msg_ASend( PID  id, MTYPE t, unsigned int v ) {
-
+  while((Process[id].mailbox.status != S_RECV_BLOCK) || ((Process[id].mailbox.status == S_RECV_BLOCK)&&((Process[id].mailbox.listen_to & t) == 0))){
+      //send block
+      Cp->mailbox.status = SEND_BLOCK;
+      Task_Next();
+  }
+  unsigned int *m = v;
+  Msg_Des msg = {Cp->pid, t, SEND, *m};
+  enqueue_ipc(&Process[id].mailbox.msg_q, &msg);
 }
 /*============
   * A Simple Test 
@@ -515,9 +522,6 @@ void Ping()
     // toggle_LED_B6();
     // _delay_ms(2000);
     // toggle_LED_B6();
-    unsigned int v = 9;
-    Msg_Send( 2, GET, &v );
-    printf("sender recieved: %d\n", v);
 }
 
 /**
@@ -526,10 +530,6 @@ void Ping()
   */
 void Pong()
 {
-  unsigned int v = 0;
-  PID reply_pid = Msg_Recv( PUT, &v );
-  printf("reciever recieved: %d\n", v);
-  Msg_Rply( reply_pid, 4);
   // printf("Hi");
   // for (;;)
   // {
@@ -542,7 +542,29 @@ void Pong()
     // toggle_LED_idle();
     // _delay_ms(3000);
     // toggle_LED_idle();
+}
 
+void sender()
+{
+    // unsigned int v = 9;
+    // Msg_Send( 2, GET, &v );
+    // printf("sender recieved: %d\n", v);
+
+    unsigned int v = 9;
+    Msg_ASend( 2, PUT, v );
+}
+
+void reciever()
+{
+  // unsigned int v = 0;
+  // PID reply_pid = Msg_Recv( GET, &v );
+  // printf("reciever recieved: %d\n", v);
+  // Msg_Rply( reply_pid, 4);
+
+  unsigned int v = 0;
+  PID reply_pid = Msg_Recv( PUT, &v );
+  printf("reciever recieved: %d\n", v);
+  // Msg_Rply( reply_pid, 4);
 }
 
 void OS_Abort(unsigned int error)
@@ -582,8 +604,8 @@ void main()
   OS_Init();
 
   Task_Create_RR(idle_func, 0);
-  Task_Create_System(Ping, 0);
-  Task_Create_System(Pong, 0);
+  Task_Create_System(sender, 0);
+  Task_Create_System(reciever, 0);
   // idle_func();
   // Task_Create_RR(Pong, 0);
   // Task_Create_RR(Pong, 0);
