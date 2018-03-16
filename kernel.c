@@ -1,5 +1,6 @@
 #include <stdbool.h>
 #include "os.h"
+#include "avr_console.h"
 #include <string.h>
 #include <avr/io.h>
 #include <util/delay.h>
@@ -7,6 +8,8 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
+// #include "ipc.h"
+#include "ipc_queue.c"
 
 #define DEBUG 1
 
@@ -15,7 +18,7 @@
   * state a task is in.
   */
 static PD Process[MAXTHREAD];
-
+static IPC_MAILBOX mailbox[10]; 
 /**
   * The process descriptor of the running task
   */
@@ -66,6 +69,10 @@ static PD * Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
   {
     if (Process[x].state == DEAD)
     {
+      Process[x].pid = x;
+      init_queue_ipc(&Process[x].mailbox.msg_q);
+      Process[x].mailbox.status = NONE_STATE;
+      Process[x].mailbox.listen_to = ALL;
       p = &(Process[x]);
       break;
     }
@@ -127,7 +134,6 @@ PID Task_Create_System(voidfuncptr f, int arg)
   {
     return -1; // Too many tasks :(
   }
-
   enqueue(&SYSTEM_TASKS, p);
   return p->pid;
 }
@@ -451,6 +457,50 @@ ISR(TIMER1_COMPA_vect)
   Enter_Kernel();
 }
 
+void Msg_Send( PID  id, MTYPE t, unsigned int *v ) {
+    while((Process[id].mailbox.status != S_RECV_BLOCK) || ((Process[id].mailbox.status == S_RECV_BLOCK)&&((Process[id].mailbox.listen_to & t) == 0))){
+      //send block
+      Cp->mailbox.status = SEND_BLOCK;
+      Task_Next();
+    }
+    Msg_Des msg = {Cp->pid, t, SEND, *v};
+    enqueue_ipc(&Process[id].mailbox.msg_q, &msg);
+    while(Cp->mailbox.msg_q.size == 0){
+      //recv block
+      Msg_Des *m = peek_ipc(&Cp->mailbox.msg_q);
+      if(m->recv_type == REPLY){
+          break;
+      }
+      Cp->mailbox.status = C_RECV_BLOCK;
+      Task_Next();
+    }
+    Msg_Des *m2 = deque_ipc(&Cp->mailbox.msg_q);
+    *v = m2->msg;
+}
+
+PID  Msg_Recv( MASK m, unsigned int *v ) {
+  Cp->mailbox.listen_to = m;
+  while(Cp->mailbox.msg_q.size == 0) {
+    // recv block
+    Cp->mailbox.status = S_RECV_BLOCK;
+    Task_Next();
+  }
+  Msg_Des *m2 = deque_ipc(&Cp->mailbox.msg_q);
+  *v = m2->msg;
+  return m2->pid;
+}
+
+void Msg_Rply( PID  id, unsigned int r ) {
+  if(Process[id].mailbox.status == C_RECV_BLOCK) {
+    Msg_Des msg = {Cp->pid, PUT, REPLY, r};
+    enqueue_ipc(&Process[id].mailbox.msg_q, &msg);
+    Task_Next();
+  }
+}
+
+void Msg_ASend( PID  id, MTYPE t, unsigned int v ) {
+
+}
 /*============
   * A Simple Test 
   *============
@@ -462,9 +512,12 @@ ISR(TIMER1_COMPA_vect)
   */
 void Ping()
 {
-    toggle_LED_B6();
-    _delay_ms(2000);
-    toggle_LED_B6();
+    // toggle_LED_B6();
+    // _delay_ms(2000);
+    // toggle_LED_B6();
+    unsigned int v = 9;
+    Msg_Send( 2, GET, &v );
+    printf("sender recieved: %d\n", v);
 }
 
 /**
@@ -473,6 +526,10 @@ void Ping()
   */
 void Pong()
 {
+  unsigned int v = 0;
+  PID reply_pid = Msg_Recv( PUT, &v );
+  printf("reciever recieved: %d\n", v);
+  Msg_Rply( reply_pid, 4);
   // printf("Hi");
   // for (;;)
   // {
@@ -482,9 +539,9 @@ void Pong()
   // toggle_LED_B6();
     // PORTB = 0b11111111;
   // }
-    toggle_LED_idle();
-    _delay_ms(3000);
-    toggle_LED_idle();
+    // toggle_LED_idle();
+    // _delay_ms(3000);
+    // toggle_LED_idle();
 
 }
 
@@ -503,6 +560,9 @@ void OS_Abort(unsigned int error)
   */
 void main()
 {
+  uart_init();
+  stdout = &uart_output;
+  stdin  = &uart_input;
   init_LED_idle();
   init_LED_B3();
   init_LED_B5();
@@ -523,6 +583,7 @@ void main()
 
   Task_Create_RR(idle_func, 0);
   Task_Create_System(Ping, 0);
+  Task_Create_System(Pong, 0);
   // idle_func();
   // Task_Create_RR(Pong, 0);
   // Task_Create_RR(Pong, 0);

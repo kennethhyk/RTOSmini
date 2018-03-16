@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include "queue.h"
 #include "os.h"
-#include "avr_console.h"
 
 typedef struct IPC_MAILBOX 
 {

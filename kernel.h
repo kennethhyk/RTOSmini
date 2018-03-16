@@ -1,3 +1,4 @@
+#include "ipc.h"
 /* pointer to void f(void) */
 typedef void (*voidfuncptr) (void);
 
@@ -34,7 +35,46 @@ extern void Enter_Kernel();
 //========================
 //  RTOS Internal      
 //========================
+typedef enum IPC_STATES {
+  NONE_STATE = 0,
+  C_RECV_BLOCK = 1,
+  S_RECV_BLOCK = 2,
+  SEND_BLOCK = 3
+} IPC_STATES;
 
+typedef enum MSG_TYPE {
+  ALL = 0xFF,
+  GET = 0x01,
+  REQUEST = 0x02,
+  PUT = 0x04
+} MSG_TYPE;
+
+typedef enum RECV_TYPE {
+  SEND = 0,
+  REPLY = 1
+} RECV_TYPE;
+
+typedef struct Msg_Des{
+    PID pid;
+    MSG_TYPE msg_typemsg_type;
+    RECV_TYPE recv_type;
+    int msg;
+    struct Msg_Des *next;
+} Msg_Des;
+
+typedef struct ipc_queue
+{
+  unsigned short size;
+  Msg_Des *head;
+  Msg_Des *tail;
+} ipc_queue;
+
+typedef struct IPC_MAILBOX 
+{
+    IPC_STATES status;
+    MSG_TYPE listen_to;
+    ipc_queue msg_q;
+} IPC_MAILBOX;
 /**
   *  This is the set of all possible priority levels for a task
   */
@@ -75,6 +115,7 @@ typedef enum kernel_request_type {
 typedef struct process_descriptor
 {
   PID pid;
+  IPC_MAILBOX mailbox;
   int arg; // integer function argument
   unsigned char *sp; // stack pointer for process memory
   unsigned char workSpace[WORKSPACE];

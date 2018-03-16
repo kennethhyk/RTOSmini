@@ -3,4 +3,4 @@ avr-gcc -c -O2 -DF_CPU=16000000 -mmcu=atmega2560 -Wa,--gstabs -o cswitch.o cswit
 avr-gcc -DF_CPU=16000000 -mmcu=atmega2560 -Wall -Wextra -Os -S cswitch.o -c kernel.c -o kernel.o
 avr-gcc -DF_CPU=16000000 -mmcu=atmega2560 -Wall -Wextra -Os -o kernel.elf kernel.c cswitch.s
 avr-objcopy -j .text -j .data -O ihex kernel.elf kernel.hex
-avrdude -v -p m2560 -c wiring -P /dev/cu.usbmodem1421 -b 115200 -D -U flash:w:kernel.hex:i
+avrdude -v -p m2560 -c wiring -P /dev/cu.usbmodem1411 -b 115200 -D -U flash:w:kernel.hex:i
