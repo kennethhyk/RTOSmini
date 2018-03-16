@@ -92,6 +92,7 @@ typedef struct process_descriptor
 
 typedef struct queue
 {
+  char name[10];
   unsigned short size;
   PD *head;
   PD *tail;

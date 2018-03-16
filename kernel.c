@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <stdbool.h>
 #include "os.h"
 #include <string.h>
@@ -306,7 +307,7 @@ static void Next_Kernel_Request()
         deque(&PERIODIC_TASKS);
         Cp->start_time = Cp->start_time + Cp->period;
         Cp->remaining_ticks = Cp->wcet;
-        enqueue_in_offset_order(&PERIODIC_TASKS, Cp);
+        enqueue_in_start_order(&PERIODIC_TASKS, Cp);
         break;
 
       case RR:
@@ -387,8 +388,12 @@ void OS_Init()
   }
 
   init_queue(&SYSTEM_TASKS);
+  strcpy(SYSTEM_TASKS.name,"SYS");
   init_queue(&PERIODIC_TASKS);
+  strcpy(PERIODIC_TASKS.name,"PRD");
   init_queue(&RR_TASKS);
+  strcpy(RR_TASKS.name,"RR");
+
 }
 
 /**
@@ -500,10 +505,10 @@ void Ping()
 {
   printf("Started Ping\n");
   toggle_LED_B5();
-  _delay_ms(2000);
+  _delay_ms(500);
   toggle_LED_B5();
   // Task_Create_RR(Pong, 0);
-  printf("Finished Ping");
+  printf("Finished Ping\n");
 }
 
 /**
@@ -540,7 +545,9 @@ void main()
   
   Task_Create_RR(idle_func, 0);
   // deque(&RR_TASKS);
-  Task_Create_System(Ping, 0);
+  // Task_Create_System(Ping, 0);
+  Task_Create_Period(Ping, 0, 6, 1, 3);
+
   // Task_Create_System(Pong, 0);
   // // Task_Create_RR(Pong, 0);
   // // Task_Create_RR(Pong, 0);
