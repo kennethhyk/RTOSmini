@@ -190,6 +190,9 @@ PID Task_Pid(void)
   return Cp->pid;
 }
 
+bool is_ipc_blocked(PD * p){
+  return (p->ipc_status == C_RECV_BLOCK) || (p->ipc_status == S_RECV_BLOCK) || (p->ipc_status == SEND_BLOCK);
+}
 /**
   * This internal kernel function is a part of the "scheduler". It chooses the 
   * next task to run, i.e., Cp.
@@ -202,7 +205,7 @@ static void Dispatch()
   }
 
   // Look through q's and pick task to run according to q precedence
-  if ((SYSTEM_TASKS.size > 0) && (peek(&SYSTEM_TASKS)->state != BLOCKED))
+  if ((SYSTEM_TASKS.size > 0) && !is_ipc_blocked((peek(&SYSTEM_TASKS))))
   {
     Cp = peek(&SYSTEM_TASKS);
     // toggle_LED_B3();
@@ -216,9 +219,10 @@ static void Dispatch()
   // else
   {
     // go through the q and find
-    while (peek(&RR_TASKS)->state == BLOCKED)
+    while (!is_ipc_blocked(peek(&SYSTEM_TASKS)) )
     {
       // idle task exists in rrq so this loop WILL terminate
+      printf("Picked task from RR\n");
       enqueue(&RR_TASKS, deque(&RR_TASKS));
     }
     Cp = peek(&RR_TASKS);
@@ -291,7 +295,7 @@ static void Next_Kernel_Request()
         break;
       }
 
-      if (Cp->state != BLOCKED)
+      if (!is_ipc_blocked(Cp) && Cp->state != BLOCKED)
       {
         Cp->state = READY;
       }
@@ -325,7 +329,7 @@ static void Next_Kernel_Request()
         break;
       }
       // change state of current process and dispatch
-      if (Cp->state != BLOCKED)
+      if (!is_ipc_blocked(Cp) && Cp->state != BLOCKED)
       {
         Cp->state = READY;
       }
@@ -335,7 +339,7 @@ static void Next_Kernel_Request()
 
     case NONE:
       /* NONE could be caused by a timer interrupt */
-      if (Cp->state != BLOCKED)
+      if (!is_ipc_blocked(Cp) && Cp->state != BLOCKED)
       {
         Cp->state = READY;
       }
@@ -456,7 +460,7 @@ void idle_func()
 {
   while (1)
   {
-    // printf("idle\n");
+    printf("idle\n");
     toggle_LED_idle();
     _delay_ms(1000);
   }
@@ -544,8 +548,10 @@ PID Msg_Recv(MASK m, unsigned int *v)
     // recv block
     Cp->ipc_status = S_RECV_BLOCK;
     // give up processor
+    printf("receive blocked\n");
     Task_Next();
   }
+
 
   PID sender_id = Cp->sender_pid;
   *v = Process[sender_id].msg.msg;
@@ -621,7 +627,7 @@ void sender()
   // printf("sender asend: %d\n", v);
 }
 
-void reciever()
+void receiver()
 {
   unsigned int v = 0;
   PID reply_pid = Msg_Recv(ALL, &v);
@@ -686,8 +692,8 @@ void main()
   OS_Init();
 
   Task_Create_RR(idle_func, 0);
-  Task_Create_System(sender, 0);
-  Task_Create_System(reciever, 0);
+  Task_Create_RR(sender, 0);
+  Task_Create_System(receiver, 0);
 
   OS_Start();
 }

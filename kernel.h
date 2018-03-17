@@ -37,9 +37,9 @@ extern void Enter_Kernel();
 //========================
 typedef enum IPC_STATES {
   NONE_STATE = 0,
-  C_RECV_BLOCK = 1,
-  S_RECV_BLOCK = 2,
-  SEND_BLOCK = 3
+  C_RECV_BLOCK,
+  S_RECV_BLOCK,
+  SEND_BLOCK
 } IPC_STATES;
 
 typedef enum MSG_TYPE {
