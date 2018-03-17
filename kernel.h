@@ -39,7 +39,7 @@ typedef enum IPC_STATES {
   NONE_STATE = 0,
   C_RECV_BLOCK,
   S_RECV_BLOCK,
-  SEND_BLOCK
+  SEND_BLOCK,
 } IPC_STATES;
 
 typedef enum MSG_TYPE {

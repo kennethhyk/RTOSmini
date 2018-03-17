@@ -146,7 +146,7 @@ PID Task_Create_System(voidfuncptr f, int arg)
 // Creates RR task and enqueues into RR_TASKS queue
 PID Task_Create_RR(voidfuncptr f, int arg)
 {
-  // printf("Creating rr tasks;");
+  printf("Creating rr tasks;");
   PD *p = Kernel_Create_Task(f, arg, RR);
   if (p == NULL)
   {
@@ -191,6 +191,7 @@ PID Task_Pid(void)
 }
 
 bool is_ipc_blocked(PD * p){
+  // printf("ipc_status, pid: %d , %d\n", p->ipc_status, p->pid);
   return (p->ipc_status == C_RECV_BLOCK) || (p->ipc_status == S_RECV_BLOCK) || (p->ipc_status == SEND_BLOCK);
 }
 /**
@@ -204,9 +205,11 @@ static void Dispatch()
     return;
   }
 
+  // printf("check if system task is ipc blocked: %d", is_ipc_blocked((peek(&SYSTEM_TASKS))));
   // Look through q's and pick task to run according to q precedence
   if ((SYSTEM_TASKS.size > 0) && !is_ipc_blocked((peek(&SYSTEM_TASKS))))
   {
+    // printf("picked task from system task\n");
     Cp = peek(&SYSTEM_TASKS);
     // toggle_LED_B3();
   }
@@ -219,10 +222,10 @@ static void Dispatch()
   // else
   {
     // go through the q and find
-    while (!is_ipc_blocked(peek(&SYSTEM_TASKS)) )
-    {
+    while ( is_ipc_blocked(peek(&RR_TASKS)) )
+    { 
+      printf("am i here;");
       // idle task exists in rrq so this loop WILL terminate
-      printf("Picked task from RR\n");
       enqueue(&RR_TASKS, deque(&RR_TASKS));
     }
     Cp = peek(&RR_TASKS);
@@ -233,6 +236,7 @@ static void Dispatch()
     OS_Abort(1);
   }
 
+  printf("Current process: %d\n", Cp->pid);
   CurrentSp = Cp->sp;
   Cp->state = RUNNING;
 }
@@ -256,6 +260,7 @@ static void Next_Kernel_Request()
     CurrentSp = Cp->sp;
     // the context switching code now replaces
     // physical stack pointer with this value
+
     Exit_Kernel();
 
     // program counter returns here on
@@ -328,11 +333,8 @@ static void Next_Kernel_Request()
         enqueue(&RR_TASKS, deque(&RR_TASKS));
         break;
       }
-      // change state of current process and dispatch
-      if (!is_ipc_blocked(Cp) && Cp->state != BLOCKED)
-      {
-        Cp->state = READY;
-      }
+
+      printf("dispatching\n");
       // choose new task to run
       Dispatch();
       break;
@@ -460,7 +462,7 @@ void idle_func()
 {
   while (1)
   {
-    printf("idle\n");
+    // printf("idle\n");
     toggle_LED_idle();
     _delay_ms(1000);
   }
@@ -510,51 +512,89 @@ void Msg_Send(PID id, MTYPE t, unsigned int *v)
   }
 
   //can i send
+  printf("Receiver ipc_status: %d\n", Process[id].ipc_status);
   while ((Process[id].ipc_status != S_RECV_BLOCK) ||
          ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0)))
   {
     //send block
+    // printf("In send block :\n");
     Cp->ipc_status = SEND_BLOCK;
+    // for multiple senders
+    if(Process[id].sender_pid == INIT_SENDER_PID){
+      Process[id].sender_pid = Cp->pid;
+    }
+
+    printf("Before send block");
     Task_Next();
+    printf("after send block");
   }
+  
+  // to block other senders sending
+  Process[id].ipc_status = NONE_STATE;
+
+  // set sender id
+  Process[id].sender_pid = Cp->pid;
 
   //notify receiver about message
   Process[id].msg.exists = true;
   // copy msg to local buffer
-  Process[id].sender_pid = Cp->pid;
+
   Cp->msg.msg_type = t;
   Cp->msg.recv_type = SEND;
   Cp->msg.msg = *v;
+  printf("Copied message to local buffer:\n");
 
   // enter reply block
   while (Cp->msg.exists == false)
   {
-    //recv block
-    Cp->ipc_status = C_RECV_BLOCK;
+    //reply block
+    // printf("In reply block:\n");
     // give up processor share
+
+    Cp->ipc_status = C_RECV_BLOCK;
     Task_Next();
   }
 
-  // receive reply
+
+  // receive reply  
   *v = Process[Cp->sender_pid].msg.msg;
+  Process[Cp->sender_pid].ipc_status = NONE_STATE;
+  // printf("Cycle finished. Final value: %d\n", *v);
 }
 
 PID Msg_Recv(MASK m, unsigned int *v)
 {
   Cp->listen_to = m;
+  int count = 0;
   // no sender sent message
   while (Cp->msg.exists == false)
   {
     // recv block
     Cp->ipc_status = S_RECV_BLOCK;
     // give up processor
-    printf("receive blocked\n");
+    printf("in msg rcev, receive blocked\n");
+    
+    // don't know which sender to unblock
+    // so check if sender set my sender_pid
+    // if so, unblock sender
+    printf("Current sender pid: %d\n", Cp->sender_pid);
+    if (Cp->sender_pid != INIT_SENDER_PID){
+      Process[Cp->sender_pid].ipc_status = NONE_STATE;
+
+    }
+    count++;
+    printf("count: %d", count);
     Task_Next();
   }
 
-
+  // pick up message
   PID sender_id = Cp->sender_pid;
+  
+  // unblock sender
+
+  // get msg
   *v = Process[sender_id].msg.msg;
+
   // received message, reset exists
   Cp->msg.exists = false;
 
@@ -565,14 +605,22 @@ void Msg_Rply(PID id, unsigned int r)
 {
   if (Process[id].ipc_status == C_RECV_BLOCK)
   {
+    // unblock sender
+    Process[id].ipc_status = NONE_STATE;
+
     //notify receiver about message
     Process[id].msg.exists = true;
+
     // copy msg to local buffer
     Process[id].sender_pid = Cp->pid;
     Cp->msg.msg_type = PUT;
     Cp->msg.recv_type = REPLY;
     Cp->msg.msg = r;
+
+    // block myself to persist data
+    Cp->ipc_status = SEND_BLOCK;
     Task_Next();
+    printf("theres only one task in system q haha.\n");
   }
 }
 
@@ -619,7 +667,7 @@ void sender()
 {
   unsigned int v = 9;
   printf("sender sent: %d\n", v);
-  Msg_Send(2, GET, &v);
+  Msg_Send(1, GET, &v);
   printf("sender recieved: %d\n", v);
 
   // unsigned int v = 9;
@@ -630,6 +678,7 @@ void sender()
 void receiver()
 {
   unsigned int v = 0;
+  // printf("reciever entered\n");
   PID reply_pid = Msg_Recv(ALL, &v);
   printf("reciever recieved: %d\n", v);
   Msg_Rply(reply_pid, 4);
@@ -692,8 +741,8 @@ void main()
   OS_Init();
 
   Task_Create_RR(idle_func, 0);
-  Task_Create_RR(sender, 0);
   Task_Create_System(receiver, 0);
+  Task_Create_System(sender, 0);
 
   OS_Start();
 }
