@@ -8,8 +8,6 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
-// #include "ipc.h"
-#include "ipc_queue.c"
 
 #define DEBUG 1
 
@@ -18,7 +16,7 @@
   * state a task is in.
   */
 static PD Process[MAXTHREAD];
-static IPC_MAILBOX mailbox[10]; 
+
 /**
   * The process descriptor of the running task
   */
@@ -70,9 +68,8 @@ static PD * Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
     if (Process[x].state == DEAD)
     {
       Process[x].pid = x;
-      init_queue_ipc(&Process[x].mailbox.msg_q);
-      Process[x].mailbox.status = NONE_STATE;
-      Process[x].mailbox.listen_to = ALL;
+      Process[x].status = NONE_STATE;
+      Process[x].listen_to = ALL;
       p = &(Process[x]);
       break;
     }
@@ -458,56 +455,89 @@ ISR(TIMER1_COMPA_vect)
 }
 
 void Msg_Send( PID  id, MTYPE t, unsigned int *v ) {
-    while((Process[id].mailbox.status != S_RECV_BLOCK) || ((Process[id].mailbox.status == S_RECV_BLOCK)&&((Process[id].mailbox.listen_to & t) == 0))){
+    //can i send
+    while( (Process[id].status != S_RECV_BLOCK) || 
+      ((Process[id].status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0))
+    ) {
       //send block
-      Cp->mailbox.status = SEND_BLOCK;
+      Cp->status = SEND_BLOCK;
       Task_Next();
     }
-    Msg_Des msg = {Cp->pid, t, SEND, *v};
-    enqueue_ipc(&Process[id].mailbox.msg_q, &msg);
-    while(Cp->mailbox.msg_q.size == 0){
+
+    //notify receiver about message
+    Process[id].msg.exists = true;
+    // copy msg to local buffer
+    Process[id].sender_pid = Cp->pid;
+    Cp->msg.msg_type = t;
+    Cp->msg.recv_type = SEND;
+    Cp->msg.msg = *v;
+
+    // enter reply block
+    while(Cp->msg.exists == false){
       //recv block
-      Msg_Des *m = peek_ipc(&Cp->mailbox.msg_q);
-      if(m->recv_type == REPLY){
-          break;
-      }
-      Cp->mailbox.status = C_RECV_BLOCK;
+      Cp->status = C_RECV_BLOCK;
+      // give up processor share
       Task_Next();
     }
-    Msg_Des *m2 = deque_ipc(&Cp->mailbox.msg_q);
-    *v = m2->msg;
+
+    // receive reply
+    *v = Process[Cp->sender_pid].msg.msg;
 }
 
 PID  Msg_Recv( MASK m, unsigned int *v ) {
-  Cp->mailbox.listen_to = m;
-  while(Cp->mailbox.msg_q.size == 0) {
+  Cp->listen_to = m;
+  // no sender sent message
+  while(Cp->msg.exists == false) {
     // recv block
-    Cp->mailbox.status = S_RECV_BLOCK;
+    Cp->status = S_RECV_BLOCK;
+    // give up processor
     Task_Next();
   }
-  Msg_Des *m2 = deque_ipc(&Cp->mailbox.msg_q);
-  *v = m2->msg;
-  return m2->pid;
+
+  PID sender_id = Cp->sender_pid;
+  *v = Process[sender_id].msg.msg;
+  // received message, reset exists
+  Cp->msg.exists = false;
+
+ return sender_id;
 }
 
 void Msg_Rply( PID  id, unsigned int r ) {
-  if(Process[id].mailbox.status == C_RECV_BLOCK) {
-    Msg_Des msg = {Cp->pid, PUT, REPLY, r};
-    enqueue_ipc(&Process[id].mailbox.msg_q, &msg);
+  if(Process[id].status == C_RECV_BLOCK) {
+    //notify receiver about message
+    Process[id].msg.exists = true;
+    // copy msg to local buffer
+    Process[id].sender_pid = Cp->pid;
+    Cp->msg.msg_type = PUT;
+    Cp->msg.recv_type = REPLY;
+    Cp->msg.msg = r;
     Task_Next();
   }
 }
 
 void Msg_ASend( PID  id, MTYPE t, unsigned int v ) {
-  while((Process[id].mailbox.status != S_RECV_BLOCK) || ((Process[id].mailbox.status == S_RECV_BLOCK)&&((Process[id].mailbox.listen_to & t) == 0))){
-      //send block
-      Cp->mailbox.status = SEND_BLOCK;
-      Task_Next();
+
+  //can i send
+  // bool in_receive_block = (Process[id].status != S_RECV_BLOCK);
+  // bool wrong_type = ((Process[id].status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0));
+  // printf("condition1: %d, condition2: %d\n", in_receive_block, wrong_type);
+  while( (Process[id].status != S_RECV_BLOCK) || 
+      ((Process[id].status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0))
+    ) {
+    //send block
+    Cp->status = SEND_BLOCK;
+    Task_Next();    
   }
-  unsigned int *m = v;
-  Msg_Des msg = {Cp->pid, t, SEND, *m};
-  enqueue_ipc(&Process[id].mailbox.msg_q, &msg);
+
+  //notify receiver about message
+  Process[id].msg.exists = true;
+  // copy msg to local buffer
+  Process[id].sender_pid = Cp->pid;
+  Cp->msg.msg_type = PUT;
+  Cp->msg.recv_type = SEND;
+  Cp->msg.msg = v;
 }
+
 /*============
   * A Simple Test 
   *============
@@ -546,24 +576,26 @@ void Pong()
 
 void sender()
 {
-    // unsigned int v = 9;
-    // Msg_Send( 2, GET, &v );
-    // printf("sender recieved: %d\n", v);
-
     unsigned int v = 9;
-    Msg_ASend( 2, PUT, v );
+    printf("sender sent: %d\n", v);
+    Msg_Send( 2, GET, &v );
+    printf("sender recieved: %d\n", v);
+
+    // unsigned int v = 9;
+    // Msg_ASend( 2, PUT, v );
+    // printf("sender asend: %d\n", v);
 }
 
 void reciever()
 {
-  // unsigned int v = 0;
-  // PID reply_pid = Msg_Recv( GET, &v );
-  // printf("reciever recieved: %d\n", v);
-  // Msg_Rply( reply_pid, 4);
-
   unsigned int v = 0;
-  PID reply_pid = Msg_Recv( PUT, &v );
+  PID reply_pid = Msg_Recv( ALL, &v );
   printf("reciever recieved: %d\n", v);
+  Msg_Rply( reply_pid, 4);
+
+  // unsigned int v = 0;
+  // PID reply_pid = Msg_Recv( PUT, &v );
+  // printf("reciever recieved: %d\n", v);
   // Msg_Rply( reply_pid, 4);
 }
 

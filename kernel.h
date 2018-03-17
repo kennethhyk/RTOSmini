@@ -51,15 +51,15 @@ typedef enum MSG_TYPE {
 
 typedef enum RECV_TYPE {
   SEND = 0,
-  REPLY = 1
+  REPLY
 } RECV_TYPE;
 
 typedef struct Msg_Des{
-    PID pid;
+    bool exists;
     MSG_TYPE msg_type;
     RECV_TYPE recv_type;
-    int msg;
-    struct Msg_Des *next;
+    unsigned int msg;
+    // struct Msg_Des *next;
 } Msg_Des;
 
 typedef struct ipc_queue
@@ -71,9 +71,9 @@ typedef struct ipc_queue
 
 typedef struct IPC_MAILBOX 
 {
-    IPC_STATES status;
-    MSG_TYPE listen_to;
-    ipc_queue msg_q;
+  IPC_STATES status;
+  MSG_TYPE listen_to;
+  ipc_queue msg_q;
 } IPC_MAILBOX;
 /**
   *  This is the set of all possible priority levels for a task
@@ -115,7 +115,10 @@ typedef enum kernel_request_type {
 typedef struct process_descriptor
 {
   PID pid;
-  IPC_MAILBOX mailbox;
+  PID sender_pid;
+  IPC_STATES status;
+  MSG_TYPE listen_to;
+  Msg_Des msg;
   int arg; // integer function argument
   unsigned char *sp; // stack pointer for process memory
   unsigned char workSpace[WORKSPACE];
