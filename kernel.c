@@ -10,7 +10,8 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
-// #include "tests/ipc-tests.c"
+//tests
+#include "tests/test_ipc_RR(send)ToSystem(receive).c"
 
 #define DEBUG 1
 
@@ -510,16 +511,12 @@ void Msg_Send(PID id, MTYPE t, unsigned int *v)
   {
     printf("ERROR SENDING MSG TO PID: %d\n", id);
     return;
-    // OS_Abort(2);
   }
-
   //can i send
-  // printf("Receiver ipc_status: %d\n", Process[id].ipc_status);
   while ((Process[id].ipc_status != S_RECV_BLOCK) ||
          ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0)))
   {
     //send block
-    // printf("In send block :\n");
     Cp->ipc_status = SEND_BLOCK;
     // for multiple senders
     if(Process[id].sender_pid == INIT_SENDER_PID){
@@ -529,40 +526,29 @@ void Msg_Send(PID id, MTYPE t, unsigned int *v)
   }
   // to block other senders sending
   Process[id].ipc_status = NONE_STATE;
-
   // set sender id
   Process[id].sender_pid = Cp->pid;
-
   //notify receiver about message
   Process[id].msg.exists = true;
   // copy msg to local buffer
-
   Cp->msg.msg_type = t;
   Cp->msg.recv_type = SEND;
   Cp->msg.msg = *v;
-  // printf("Copied message to local buffer:\n");
-
   // enter reply block
   while (Cp->msg.exists == false)
   {
     //reply block
-    // printf("In reply block:\n");
     // give up processor share
-
     Cp->ipc_status = C_RECV_BLOCK;
     Task_Next();
   }
-
-
   // receive reply  
   *v = Process[Cp->sender_pid].msg.msg;
   Process[Cp->sender_pid].ipc_status = NONE_STATE;
-  // printf("Cycle finished. Final value: %d\n", *v);
 }
 
 PID Msg_Recv(MASK m, unsigned int *v)
 {
-  printf("reciever id: %d", Cp->pid);
   Cp->listen_to = m;
   int count = 0;
   // no sender sent message
@@ -595,10 +581,8 @@ PID Msg_Recv(MASK m, unsigned int *v)
     Cp->async_msg.exists = false;
     return sender_id;
   }
-
   printf("PROBLEM HERE");
   return;
-
 }
 
 void Msg_Rply(PID id, unsigned int r)
@@ -607,16 +591,13 @@ void Msg_Rply(PID id, unsigned int r)
   {
     // unblock sender
     Process[id].ipc_status = NONE_STATE;
-
     //notify receiver about message
     Process[id].msg.exists = true;
-
     // copy msg to local buffer
     Process[id].sender_pid = Cp->pid;
     Cp->msg.msg_type = PUT;
     Cp->msg.recv_type = REPLY;
     Cp->msg.msg = r;
-
     // block myself to persist data
     Cp->ipc_status = SEND_BLOCK;
     Task_Next();
@@ -629,13 +610,8 @@ void Msg_ASend(PID id, MTYPE t, unsigned int v)
   {
     printf("ERROR SENDING MSG TO PID: %d\n", id);
     return;
-    // OS_Abort(2);
   }
-
   //can i send
-  // bool in_receive_block = (Process[id].ipc_status != S_RECV_BLOCK);
-  // bool wrong_type = ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0));
-  // printf("condition1: %d, condition2: %d\n", in_receive_block, wrong_type);
   if ((Process[id].ipc_status != S_RECV_BLOCK) ||
          ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0)))
   {
@@ -643,7 +619,6 @@ void Msg_ASend(PID id, MTYPE t, unsigned int v)
     // return async send
     return;
   }
-
   //notify receiver about message
   Process[id].async_msg.exists = true;
   // copy msg to receiver buffer
@@ -651,7 +626,6 @@ void Msg_ASend(PID id, MTYPE t, unsigned int v)
   Process[id].async_msg.sender_pid = Cp->pid;
   Process[id].async_msg.msg = v;
   Process[id].async_msg.recv_type = SEND;
-
   // unblock receiver
   Process[id].ipc_status = NONE_STATE;
 }
@@ -669,33 +643,6 @@ void OS_Abort(unsigned int error)
     // toggle_LED_B3();
     _delay_ms(500);
   }
-}
-
-void sender()
-{
-  printf("sender\n");
-  unsigned int v = 9;
-  Msg_Send(2, GET, v);
-  printf("sender sent: %d\n", v);
-  Task_Next();
-  // unsigned int v = 9;
-  // Msg_ASend( 2, PUT, v );
-  // printf("sender asend: %d\n", v);
-}
-
-void receiver()
-{
-  printf("recver\n");
-  unsigned int v = 0;
-  // printf("reciever entered\n");
-  PID reply_pid = Msg_Recv(ALL, &v);
-  printf("reciever recieved: %d\n", v);
-  Msg_Rply(reply_pid, 4);
-
-  // unsigned int v = 0;
-  // PID reply_pid = Msg_Recv( PUT, &v );
-  // printf("reciever recieved: %d\n", v);
-  // Msg_Rply( reply_pid, 4);
 }
 
 void Ping()
@@ -745,14 +692,12 @@ void main()
   // _delay_ms(500);
   // }
 
-  printf("=========\n");
+  printf("\n\n====================================\n");
   // clear memory and prepare queues
   OS_Init();
 
   Task_Create_RR(idle_func, 0);
-  Task_Create_System(sender, 0);
-  Task_Create_RR(receiver, 0);
-  // Task_Create_System(a_main, 0);
+  Task_Create_System(a_main, 0);
 
   OS_Start();
 }
