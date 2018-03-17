@@ -14,12 +14,11 @@ void receiver()
   unsigned int reply_msg = 4;
   PID reply_pid = Msg_Recv(ALL, &v);
   printf("receiver recieved from sender(pid:%u): <---- %u\n", reply_pid, v);
-  printf("starting replying to sender(pid:%u): ----> %u\n", reply_pid, reply_msg);
-  Msg_Rply(reply_pid, reply_msg);
+  printf("I got the message but i m not replying.");
 }
 
 void a_main() {
-  printf("RR to System\n EXPECTS 9 9 4 4\n\n");
-  Task_Create_RR(sender, 0);
+  printf("receiver get the message but did not reply sender is in reply block now\nSHOULD SEE THE SENDER SENDS, RECEVIER RECEIVED BUT NO GETTING THE REPLY MESSAGE\n\n");
+  Task_Create_System(sender, 0);
   Task_Create_System(receiver, 0);
 }

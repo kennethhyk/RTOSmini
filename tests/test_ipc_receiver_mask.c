@@ -12,14 +12,14 @@ void receiver()
 {
   unsigned int v = 0;
   unsigned int reply_msg = 4;
-  PID reply_pid = Msg_Recv(ALL, &v);
+  PID reply_pid = Msg_Recv(PUT, &v);
   printf("receiver recieved from sender(pid:%u): <---- %u\n", reply_pid, v);
   printf("starting replying to sender(pid:%u): ----> %u\n", reply_pid, reply_msg);
   Msg_Rply(reply_pid, reply_msg);
 }
 
 void a_main() {
-  printf("RR to System\n EXPECTS 9 9 4 4\n\n");
-  Task_Create_RR(sender, 0);
+  printf("Sender msg type: GET but receiver only accept PUT. Receiver should not get the msg and no reply.\nSHOULD ONLY SEE THE SENDER SENDS\n\n");
+  Task_Create_System(sender, 0);
   Task_Create_System(receiver, 0);
 }

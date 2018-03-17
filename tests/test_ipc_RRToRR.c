@@ -6,7 +6,6 @@ void sender()
   printf("sender sending to task(pid:%u): ----> %u\n", pid, v);
   Msg_Send(3, GET, &v);
   printf("sender received reply: <---- %u\n", v);
-  Task_Next();
 }
 
 void receiver()
@@ -20,6 +19,7 @@ void receiver()
 }
 
 void a_main() {
+  printf("RR to RR\n EXPECTS 9 9 4 4\n\n");
   Task_Create_RR(sender, 0);
   Task_Create_RR(receiver, 0);
 }

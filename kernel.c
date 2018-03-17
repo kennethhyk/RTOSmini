@@ -11,7 +11,7 @@
 #include "kernel.h"
 #include "queue.c"
 //tests
-#include "tests/test_ipc_RR(send)ToSystem(receive).c"
+#include "tests/test_ipc_reply_block.c"
 
 #define DEBUG 1
 
