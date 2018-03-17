@@ -1,24 +1,25 @@
 /* Last modified: MHMC Jan/30/2018 */
-#ifndef _OS_H_  
-#define _OS_H_  
+#ifndef _OS_H_
+#define _OS_H_
 
 // #ifndef NULL
 // #define NULL          0   /* undefined */
 // #endif
-#define MAXTHREAD     16    // Incremented by 1 to account for idle_tacwk       
-#define WORKSPACE     256   // in bytes, per THREAD
-#define MSECPERTICK   10   // resolution of a system TICK in milliseconds
+#define MAXTHREAD 16        // Incremented by 1 to account for idle_tacwk
+#define WORKSPACE 256       // in bytes, per THREAD
+#define MSECPERTICK 10      // resolution of a system TICK in milliseconds
+#define INIT_SENDER_PID 999 // dead ipc pid
 
-#define TRUE          1
-#define FALSE         0
+#define TRUE 1
+#define FALSE 0
 
-#define ANY           0xFF       // a mask for ALL message type
+#define ANY 0xFF // a mask for ALL message type
 
-typedef unsigned int PID;        // always non-zero if it is valid
-typedef unsigned int TICK;       // 1 TICK is defined by MSECPERTICK
-typedef unsigned int BOOL;       // TRUE or FALSE
+typedef unsigned int PID;  // always non-zero if it is valid
+typedef unsigned int TICK; // 1 TICK is defined by MSECPERTICK
+typedef unsigned int BOOL; // TRUE or FALSE
 typedef unsigned char MTYPE;
-typedef unsigned char MASK; 
+typedef unsigned char MASK;
 
 // Aborts the RTOS and enters a "non-executing" state with an error code. That is, all tasks
 // will be stopped.
@@ -46,10 +47,10 @@ void OS_Abort(unsigned int error);
  * is defined to be 1 TICK.
  */
 
-PID   Task_Create_System(void (*f)(void), int arg);
-PID   Task_Create_RR(    void (*f)(void), int arg);
+PID Task_Create_System(void (*f)(void), int arg);
+PID Task_Create_RR(void (*f)(void), int arg);
 
- /**
+/**
    * f a parameterless function to be created as a process instance
    * arg an integer argument to be assigned to this process instanace
    * period its execution period in multiples of TICKs
@@ -57,24 +58,21 @@ PID   Task_Create_RR(    void (*f)(void), int arg);
    * offset its start time in TICKs
    * returns 0 if not successful; otherwise a non-zero PID.
    */
-PID   Task_Create_Period(void (*f)(void), int arg, TICK period, TICK wcet, TICK offset);
+PID Task_Create_Period(void (*f)(void), int arg, TICK period, TICK wcet, TICK offset);
 
 // NOTE: When a task function returns, it terminates automatically!!
 
 // When a Periodic ask calls Task_Next(), it will resume at the beginning of its next period.
-// When a RR or System task calls Task_Next(), it voluntarily gives up execution and 
+// When a RR or System task calls Task_Next(), it voluntarily gives up execution and
 // re-enters the ready state. All RR and Systems tasks are first-come-first-served.
-//   
+//
 void Task_Next(void);
 
-
 // The calling task gets its initial "argument" when it was created.
-int  Task_GetArg(void);
-
+int Task_GetArg(void);
 
 // It returns the calling task's PID.
-PID  Task_Pid(void);
-
+PID Task_Pid(void);
 
 //
 // Send-Recv-Rply is similar to QNX-style message-passing
@@ -83,9 +81,9 @@ PID  Task_Pid(void);
 //
 // Note: PERIODIC tasks are not allowed to use Msg_Send() or Msg_Recv().
 //
-void Msg_Send( PID  id, MTYPE t, unsigned int *v );
-PID  Msg_Recv( MASK m,           unsigned int *v );
-void Msg_Rply( PID  id,          unsigned int r );
+void Msg_Send(PID id, MTYPE t, unsigned int *v);
+PID Msg_Recv(MASK m, unsigned int *v);
+void Msg_Rply(PID id, unsigned int r);
 
 //
 // Asychronously Send a message "v" of type "t" to "id". The task "id" must be blocked on
@@ -96,8 +94,7 @@ void Msg_Rply( PID  id,          unsigned int r );
 //
 // Note: PERIODIC tasks (or interrupt handlers), however, may use Msg_ASend()!!!
 //
-void Msg_ASend( PID  id, MTYPE t, unsigned int v );
-
+void Msg_ASend(PID id, MTYPE t, unsigned int v);
 
 /**  
   * Returns the number of milliseconds since OS_Init(). Note that this number
@@ -113,20 +110,19 @@ void Msg_ASend( PID  id, MTYPE t, unsigned int v );
   * Now() will wrap around every 65536 milliseconds. Therefore, for measurement
   * purposes, it should be used for durations less than 65 seconds.
   */
-unsigned int Now();  // number of milliseconds since the RTOS boots.
-
+unsigned int Now(); // number of milliseconds since the RTOS boots.
 
 /*==================================================================  
  *        S T A N D A R D   I N L I N E    P R O C E D U R E S  
  *==================================================================  
- */    
- /*   
+ */
+/*   
   * inline assembly code to disable/enable maskable interrupts   
   * (N.B. Use with caution.)  
   */
 
-#define OS_DI()    asm(" cli ")  /* disable all interrupts */  
-#define OS_EI()    asm(" sei ")  /* enable all interrupts */  
+#define OS_DI() asm(" cli ") /* disable all interrupts */
+#define OS_EI() asm(" sei ") /* enable all interrupts */
 
 /**
  * Booting:

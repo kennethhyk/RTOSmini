@@ -57,7 +57,7 @@ unsigned char *CurrentSp;
 /**
   *  Create a new task
 */
-static PD * Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
+static PD *Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
 {
   int x;
   PD *p = NULL;
@@ -73,8 +73,11 @@ static PD * Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
     if (Process[x].state == DEAD)
     {
       Process[x].pid = x;
-      Process[x].status = NONE_STATE;
+      Process[x].ipc_status = NONE_STATE;
       Process[x].listen_to = ALL;
+      Process[x].sender_pid = INIT_SENDER_PID;
+      // empty msg descriptor
+      memset(&Process[x].msg, 0, sizeof(Msg_Des));
       p = &(Process[x]);
       break;
     }
@@ -143,7 +146,7 @@ PID Task_Create_System(voidfuncptr f, int arg)
 // Creates RR task and enqueues into RR_TASKS queue
 PID Task_Create_RR(voidfuncptr f, int arg)
 {
-  // printf("Creating rr tasks;"); 
+  // printf("Creating rr tasks;");
   PD *p = Kernel_Create_Task(f, arg, RR);
   if (p == NULL)
   {
@@ -220,7 +223,8 @@ static void Dispatch()
     }
     Cp = peek(&RR_TASKS);
   }
-  else {
+  else
+  {
     printf("HOUSTON, WE HAVE A PROBLEM!");
     OS_Abort(1);
   }
@@ -283,11 +287,12 @@ static void Next_Kernel_Request()
           // reset ticks and move to back of q
           Cp->remaining_ticks = 1;
           enqueue(&RR_TASKS, deque(&RR_TASKS));
-         }
+        }
         break;
       }
 
-      if (Cp->state != BLOCKED){
+      if (Cp->state != BLOCKED)
+      {
         Cp->state = READY;
       }
 
@@ -320,7 +325,8 @@ static void Next_Kernel_Request()
         break;
       }
       // change state of current process and dispatch
-      if (Cp->state != BLOCKED){
+      if (Cp->state != BLOCKED)
+      {
         Cp->state = READY;
       }
       // choose new task to run
@@ -329,7 +335,8 @@ static void Next_Kernel_Request()
 
     case NONE:
       /* NONE could be caused by a timer interrupt */
-      if (Cp->state != BLOCKED){
+      if (Cp->state != BLOCKED)
+      {
         Cp->state = READY;
       }
       Dispatch();
@@ -390,12 +397,11 @@ void OS_Init()
   }
 
   init_queue(&SYSTEM_TASKS);
-  strcpy(SYSTEM_TASKS.name,"SYS");
+  strcpy(SYSTEM_TASKS.name, "SYS");
   init_queue(&PERIODIC_TASKS);
-  strcpy(PERIODIC_TASKS.name,"PRD");
+  strcpy(PERIODIC_TASKS.name, "PRD");
   init_queue(&RR_TASKS);
-  strcpy(RR_TASKS.name,"RR");
-
+  strcpy(RR_TASKS.name, "RR");
 }
 
 /**
@@ -408,7 +414,7 @@ void OS_Start()
   {
     init_timer();
     // Select a free task and dispatch it
-    
+
     KernelActive = 1;
     Next_Kernel_Request();
     /* NEVER RETURNS!!! */
@@ -432,17 +438,24 @@ void Task_Next()
 void Task_Terminate()
 {
   OS_DI();
-  // memset(Cp, 0, sizeof(PD));
   Cp->request = TERMINATE;
   Cp->state = DEAD;
   TotalTasks--;
+
+  Cp->sender_pid = INIT_SENDER_PID;
+  Cp->ipc_status = NONE_STATE;
+  Cp->listen_to = ALL;
+  // clear msg descriptor
+  memset(&Cp->msg, 0, sizeof(Msg_Des));
+
   Enter_Kernel();
   /* never returns here! */
 }
 
 void idle_func()
 {
-  while(1){
+  while (1)
+  {
     // printf("idle\n");
     toggle_LED_idle();
     _delay_ms(1000);
@@ -452,8 +465,8 @@ void idle_func()
 void init_timer()
 {
   //Clear timer config.
-  TCCR1A = 0;// set entire TCCR1A register to 0
-  TCCR1B = 0;// same for TCCR1B
+  TCCR1A = 0; // set entire TCCR1A register to 0
+  TCCR1B = 0; // same for TCCR1B
 
   // OCR1A = 15999;       // for 10ms
   // turn on CTC mode
@@ -461,13 +474,13 @@ void init_timer()
   // TCCR1B |= (1 << CS00); // for 10ms
   // TIMSK1 |= (1 << OCIE1A); // for 10ms
 
-// for 1s
-  TCNT1  = 0;//initialize counter value to 0
+  // for 1s
+  TCNT1 = 0; //initialize counter value to 0
   // set compare match register for 1hz increments
-  OCR1A = 15624;// = (16*10^6) / (1*1024) - 1 (must be <65536)
+  OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
   // Set CS10 and CS12 bits for 1024 prescaler
-  TCCR1B |= (1 << CS12) | (1 << CS10);  
-// for 1s
+  TCCR1B |= (1 << CS12) | (1 << CS10);
+  // for 1s
 
   // enable timer compare interrupt
   TIMSK1 |= (1 << OCIE1A);
@@ -483,42 +496,53 @@ ISR(TIMER1_COMPA_vect)
   Enter_Kernel();
 }
 
-void Msg_Send( PID  id, MTYPE t, unsigned int *v ) {
-    //can i send
-    while( (Process[id].status != S_RECV_BLOCK) || 
-      ((Process[id].status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0))
-    ) {
-      //send block
-      Cp->status = SEND_BLOCK;
-      Task_Next();
-    }
+void Msg_Send(PID id, MTYPE t, unsigned int *v)
+{
+  if (id >= 16)
+  {
+    printf("ERROR SENDING MSG TO PID: %d\n", id);
+    return;
+    // OS_Abort(2);
+  }
 
-    //notify receiver about message
-    Process[id].msg.exists = true;
-    // copy msg to local buffer
-    Process[id].sender_pid = Cp->pid;
-    Cp->msg.msg_type = t;
-    Cp->msg.recv_type = SEND;
-    Cp->msg.msg = *v;
+  //can i send
+  while ((Process[id].ipc_status != S_RECV_BLOCK) ||
+         ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0)))
+  {
+    //send block
+    Cp->ipc_status = SEND_BLOCK;
+    Task_Next();
+  }
 
-    // enter reply block
-    while(Cp->msg.exists == false){
-      //recv block
-      Cp->status = C_RECV_BLOCK;
-      // give up processor share
-      Task_Next();
-    }
+  //notify receiver about message
+  Process[id].msg.exists = true;
+  // copy msg to local buffer
+  Process[id].sender_pid = Cp->pid;
+  Cp->msg.msg_type = t;
+  Cp->msg.recv_type = SEND;
+  Cp->msg.msg = *v;
 
-    // receive reply
-    *v = Process[Cp->sender_pid].msg.msg;
+  // enter reply block
+  while (Cp->msg.exists == false)
+  {
+    //recv block
+    Cp->ipc_status = C_RECV_BLOCK;
+    // give up processor share
+    Task_Next();
+  }
+
+  // receive reply
+  *v = Process[Cp->sender_pid].msg.msg;
 }
 
-PID  Msg_Recv( MASK m, unsigned int *v ) {
+PID Msg_Recv(MASK m, unsigned int *v)
+{
   Cp->listen_to = m;
   // no sender sent message
-  while(Cp->msg.exists == false) {
+  while (Cp->msg.exists == false)
+  {
     // recv block
-    Cp->status = S_RECV_BLOCK;
+    Cp->ipc_status = S_RECV_BLOCK;
     // give up processor
     Task_Next();
   }
@@ -528,11 +552,13 @@ PID  Msg_Recv( MASK m, unsigned int *v ) {
   // received message, reset exists
   Cp->msg.exists = false;
 
- return sender_id;
+  return sender_id;
 }
 
-void Msg_Rply( PID  id, unsigned int r ) {
-  if(Process[id].status == C_RECV_BLOCK) {
+void Msg_Rply(PID id, unsigned int r)
+{
+  if (Process[id].ipc_status == C_RECV_BLOCK)
+  {
     //notify receiver about message
     Process[id].msg.exists = true;
     // copy msg to local buffer
@@ -544,18 +570,19 @@ void Msg_Rply( PID  id, unsigned int r ) {
   }
 }
 
-void Msg_ASend( PID  id, MTYPE t, unsigned int v ) {
+void Msg_ASend(PID id, MTYPE t, unsigned int v)
+{
 
   //can i send
-  // bool in_receive_block = (Process[id].status != S_RECV_BLOCK);
-  // bool wrong_type = ((Process[id].status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0));
+  // bool in_receive_block = (Process[id].ipc_status != S_RECV_BLOCK);
+  // bool wrong_type = ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0));
   // printf("condition1: %d, condition2: %d\n", in_receive_block, wrong_type);
-  while( (Process[id].status != S_RECV_BLOCK) || 
-      ((Process[id].status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0))
-    ) {
+  while ((Process[id].ipc_status != S_RECV_BLOCK) ||
+         ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0)))
+  {
     //send block
-    Cp->status = SEND_BLOCK;
-    Task_Next();    
+    Cp->ipc_status = SEND_BLOCK;
+    Task_Next();
   }
 
   //notify receiver about message
@@ -575,7 +602,8 @@ void Msg_ASend( PID  id, MTYPE t, unsigned int v ) {
 void OS_Abort(unsigned int error)
 {
   OS_DI();
-  while(1){
+  while (1)
+  {
     // toggle_LED_B3();
     _delay_ms(500);
   }
@@ -583,29 +611,28 @@ void OS_Abort(unsigned int error)
 
 void sender()
 {
-    unsigned int v = 9;
-    printf("sender sent: %d\n", v);
-    Msg_Send( 2, GET, &v );
-    printf("sender recieved: %d\n", v);
+  unsigned int v = 9;
+  printf("sender sent: %d\n", v);
+  Msg_Send(2, GET, &v);
+  printf("sender recieved: %d\n", v);
 
-    // unsigned int v = 9;
-    // Msg_ASend( 2, PUT, v );
-    // printf("sender asend: %d\n", v);
+  // unsigned int v = 9;
+  // Msg_ASend( 2, PUT, v );
+  // printf("sender asend: %d\n", v);
 }
 
 void reciever()
 {
   unsigned int v = 0;
-  PID reply_pid = Msg_Recv( ALL, &v );
+  PID reply_pid = Msg_Recv(ALL, &v);
   printf("reciever recieved: %d\n", v);
-  Msg_Rply( reply_pid, 4);
+  Msg_Rply(reply_pid, 4);
 
   // unsigned int v = 0;
   // PID reply_pid = Msg_Recv( PUT, &v );
   // printf("reciever recieved: %d\n", v);
   // Msg_Rply( reply_pid, 4);
 }
-
 
 void Ping()
 {
@@ -618,7 +645,7 @@ void Ping()
 }
 
 void Pong()
-{ 
+{
   printf("started pong\n");
   toggle_LED_B6();
   _delay_ms(4000);
@@ -644,20 +671,20 @@ void main()
 
   // test lights
   // for(;;){
-    // toggle_LED_B6();
-    // _delay_ms(500);
-    // toggle_LED_B5();
-    // _delay_ms(500);
-    // toggle_LED_B3();
-    // _delay_ms(500);
-    // toggle_LED_idle();
-    // _delay_ms(500);
+  // toggle_LED_B6();
+  // _delay_ms(500);
+  // toggle_LED_B5();
+  // _delay_ms(500);
+  // toggle_LED_B3();
+  // _delay_ms(500);
+  // toggle_LED_idle();
+  // _delay_ms(500);
   // }
 
   printf("=========\n");
   // clear memory and prepare queues
   OS_Init();
-  
+
   Task_Create_RR(idle_func, 0);
   Task_Create_System(sender, 0);
   Task_Create_System(reciever, 0);

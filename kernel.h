@@ -62,19 +62,6 @@ typedef struct Msg_Des{
     // struct Msg_Des *next;
 } Msg_Des;
 
-typedef struct ipc_queue
-{
-  unsigned short size;
-  Msg_Des *head;
-  Msg_Des *tail;
-} ipc_queue;
-
-typedef struct IPC_MAILBOX 
-{
-  IPC_STATES status;
-  MSG_TYPE listen_to;
-  ipc_queue msg_q;
-} IPC_MAILBOX;
 /**
   *  This is the set of all possible priority levels for a task
   */
@@ -116,7 +103,7 @@ typedef struct process_descriptor
 {
   PID pid;
   PID sender_pid;
-  IPC_STATES status;
+  IPC_STATES ipc_status;
   MSG_TYPE listen_to;
   Msg_Des msg;
   int arg; // integer function argument
