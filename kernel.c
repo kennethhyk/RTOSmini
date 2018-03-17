@@ -10,6 +10,7 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
+#include "./tests/ipc-sync-system-system.c"
 
 #define DEBUG 1
 
@@ -609,30 +610,30 @@ void OS_Abort(unsigned int error)
   }
 }
 
-void sender()
-{
-  unsigned int v = 9;
-  printf("sender sent: %d\n", v);
-  Msg_Send(2, GET, &v);
-  printf("sender recieved: %d\n", v);
+// void sender()
+// {
+//   unsigned int v = 9;
+//   printf("sender sent: %d\n", v);
+//   Msg_Send(2, GET, &v);
+//   printf("sender recieved: %d\n", v);
 
-  // unsigned int v = 9;
-  // Msg_ASend( 2, PUT, v );
-  // printf("sender asend: %d\n", v);
-}
+//   // unsigned int v = 9;
+//   // Msg_ASend( 2, PUT, v );
+//   // printf("sender asend: %d\n", v);
+// }
 
-void reciever()
-{
-  unsigned int v = 0;
-  PID reply_pid = Msg_Recv(ALL, &v);
-  printf("reciever recieved: %d\n", v);
-  Msg_Rply(reply_pid, 4);
+// void reciever()
+// {
+//   unsigned int v = 0;
+//   PID reply_pid = Msg_Recv(ALL, &v);
+//   printf("reciever recieved: %d\n", v);
+//   Msg_Rply(reply_pid, 4);
 
-  // unsigned int v = 0;
-  // PID reply_pid = Msg_Recv( PUT, &v );
-  // printf("reciever recieved: %d\n", v);
-  // Msg_Rply( reply_pid, 4);
-}
+//   // unsigned int v = 0;
+//   // PID reply_pid = Msg_Recv( PUT, &v );
+//   // printf("reciever recieved: %d\n", v);
+//   // Msg_Rply( reply_pid, 4);
+// }
 
 void Ping()
 {
@@ -686,8 +687,7 @@ void main()
   OS_Init();
 
   Task_Create_RR(idle_func, 0);
-  Task_Create_System(sender, 0);
-  Task_Create_System(reciever, 0);
+  Task_Create_System(a_main, 0);
 
   OS_Start();
 }
