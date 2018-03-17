@@ -126,6 +126,7 @@ typedef struct process_descriptor
   TICK wcet;
   TICK start_time;
   TICK remaining_ticks;
+  TICK next_start;
   PROCESS_STATES state;
   voidfuncptr code; // function to be executed as part of task
   KERNEL_REQUEST_TYPE request;
@@ -135,6 +136,7 @@ typedef struct process_descriptor
 
 typedef struct queue
 {
+  char name[10];
   unsigned short size;
   PD *head;
   PD *tail;
@@ -158,3 +160,11 @@ PD * deque(task_queue * q);
 PD * peek(task_queue * q);
 void enqueue_in_offset_order(task_queue * q, PD * task);
 void Setup_Function_Stack(PD *p, PID pid, voidfuncptr f);
+
+/*   
+* inline assembly code to disable/enable maskable interrupts   
+* (N.B. Use with caution.)  
+*/  
+
+#define OS_EI()    asm(" sei ")  /* disable all interrupts */
+#define OS_DI()    asm(" cli ")  /* enable all interrupts */
