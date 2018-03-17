@@ -10,7 +10,7 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
-#include "tests/ipc-tests.c"
+// #include "tests/ipc-tests.c"
 
 #define DEBUG 1
 
@@ -525,12 +525,8 @@ void Msg_Send(PID id, MTYPE t, unsigned int *v)
     if(Process[id].sender_pid == INIT_SENDER_PID){
       Process[id].sender_pid = Cp->pid;
     }
-
-    // printf("Before send block");
     Task_Next();
-    // printf("after send block");
   }
-  
   // to block other senders sending
   Process[id].ipc_status = NONE_STATE;
 
@@ -574,18 +570,14 @@ PID Msg_Recv(MASK m, unsigned int *v)
   {
     // recv block
     Cp->ipc_status = S_RECV_BLOCK;
-    
     // don't know which sender to unblock
     // so check if sender set my sender_pid
     // if so, unblock sender
     if (Cp->sender_pid != INIT_SENDER_PID){
       Process[Cp->sender_pid].ipc_status = NONE_STATE;
-
     }
-
     Task_Next();
   }
-
   if (Cp->msg.exists){
     // pick up message
     PID sender_id = Cp->sender_pid;
@@ -679,6 +671,33 @@ void OS_Abort(unsigned int error)
   }
 }
 
+void sender()
+{
+  printf("sender\n");
+  unsigned int v = 9;
+  Msg_Send(2, GET, v);
+  printf("sender sent: %d\n", v);
+  Task_Next();
+  // unsigned int v = 9;
+  // Msg_ASend( 2, PUT, v );
+  // printf("sender asend: %d\n", v);
+}
+
+void receiver()
+{
+  printf("recver\n");
+  unsigned int v = 0;
+  // printf("reciever entered\n");
+  PID reply_pid = Msg_Recv(ALL, &v);
+  printf("reciever recieved: %d\n", v);
+  Msg_Rply(reply_pid, 4);
+
+  // unsigned int v = 0;
+  // PID reply_pid = Msg_Recv( PUT, &v );
+  // printf("reciever recieved: %d\n", v);
+  // Msg_Rply( reply_pid, 4);
+}
+
 void Ping()
 {
   printf("Started Ping\n");
@@ -731,7 +750,9 @@ void main()
   OS_Init();
 
   Task_Create_RR(idle_func, 0);
-  Task_Create_System(a_main, 0);
+  Task_Create_System(sender, 0);
+  Task_Create_RR(receiver, 0);
+  // Task_Create_System(a_main, 0);
 
   OS_Start();
 }
