@@ -15,7 +15,7 @@ void enqueue(task_queue * q, PD * task) {
     q->tail = task;
     task->next = NULL;
     q->size++;
-    printf("Enqueued. %s size: %d\n", q->name, q->size);
+    // printf("Enqueued. %s size: %d\n", q->name, q->size);
     return;
 }
 
@@ -35,7 +35,7 @@ PD * deque(task_queue * q) {
         q->size--;
     }
 
-    printf("Dequed. %s size: %d\n", q->name, q->size);
+    // printf("Dequed. %s size: %d\n", q->name, q->size);
     return p;
 }
 
@@ -71,7 +71,7 @@ void enqueue_in_start_order(task_queue * q, PD * task) {
 		}
 
         q->size++;
-        printf("Enqueued. %s size: %d\n", q->name, q->size);
+        // printf("Enqueued. %s size: %d\n", q->name, q->size);
         return;
 	}
 }

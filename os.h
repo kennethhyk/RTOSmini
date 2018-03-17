@@ -99,7 +99,6 @@ void Msg_Rply( PID  id,          unsigned int r );
 void Msg_ASend( PID  id, MTYPE t, unsigned int v );
 
 
-
 /**  
   * Returns the number of milliseconds since OS_Init(). Note that this number
   * wraps around after it overflows as an unsigned integer. The arithmetic
@@ -120,7 +119,14 @@ unsigned int Now();  // number of milliseconds since the RTOS boots.
 /*==================================================================  
  *        S T A N D A R D   I N L I N E    P R O C E D U R E S  
  *==================================================================  
- */  
+ */    
+ /*   
+  * inline assembly code to disable/enable maskable interrupts   
+  * (N.B. Use with caution.)  
+  */
+
+#define OS_DI()    asm(" cli ")  /* disable all interrupts */  
+#define OS_EI()    asm(" sei ")  /* enable all interrupts */  
 
 /**
  * Booting:

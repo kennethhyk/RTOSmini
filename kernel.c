@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include "os.h"
+#include "avr_console.h"
 #include <string.h>
 #include <avr/io.h>
 #include <util/delay.h>
@@ -9,7 +10,6 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
-#include "avr_console.h"
 
 #define DEBUG 1
 
@@ -72,6 +72,9 @@ static PD * Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
   {
     if (Process[x].state == DEAD)
     {
+      Process[x].pid = x;
+      Process[x].status = NONE_STATE;
+      Process[x].listen_to = ALL;
       p = &(Process[x]);
       break;
     }
@@ -133,7 +136,6 @@ PID Task_Create_System(voidfuncptr f, int arg)
   {
     return -1; // Too many tasks :(
   }
-
   enqueue(&SYSTEM_TASKS, p);
   return p->pid;
 }
@@ -141,7 +143,7 @@ PID Task_Create_System(voidfuncptr f, int arg)
 // Creates RR task and enqueues into RR_TASKS queue
 PID Task_Create_RR(voidfuncptr f, int arg)
 {
-  printf("Creating rr tasks;"); 
+  // printf("Creating rr tasks;"); 
   PD *p = Kernel_Create_Task(f, arg, RR);
   if (p == NULL)
   {
@@ -150,7 +152,7 @@ PID Task_Create_RR(voidfuncptr f, int arg)
 
   p->remaining_ticks = 1;
   enqueue(&RR_TASKS, p);
-  printf("size of rrq: %d\n", RR_TASKS.size);
+  // printf("size of rrq: %d\n", RR_TASKS.size);
   return p->pid;
 }
 
@@ -441,7 +443,7 @@ void Task_Terminate()
 void idle_func()
 {
   while(1){
-    printf("idle\n");
+    // printf("idle\n");
     toggle_LED_idle();
     _delay_ms(1000);
   }
@@ -481,6 +483,94 @@ ISR(TIMER1_COMPA_vect)
   Enter_Kernel();
 }
 
+void Msg_Send( PID  id, MTYPE t, unsigned int *v ) {
+    //can i send
+    while( (Process[id].status != S_RECV_BLOCK) || 
+      ((Process[id].status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0))
+    ) {
+      //send block
+      Cp->status = SEND_BLOCK;
+      Task_Next();
+    }
+
+    //notify receiver about message
+    Process[id].msg.exists = true;
+    // copy msg to local buffer
+    Process[id].sender_pid = Cp->pid;
+    Cp->msg.msg_type = t;
+    Cp->msg.recv_type = SEND;
+    Cp->msg.msg = *v;
+
+    // enter reply block
+    while(Cp->msg.exists == false){
+      //recv block
+      Cp->status = C_RECV_BLOCK;
+      // give up processor share
+      Task_Next();
+    }
+
+    // receive reply
+    *v = Process[Cp->sender_pid].msg.msg;
+}
+
+PID  Msg_Recv( MASK m, unsigned int *v ) {
+  Cp->listen_to = m;
+  // no sender sent message
+  while(Cp->msg.exists == false) {
+    // recv block
+    Cp->status = S_RECV_BLOCK;
+    // give up processor
+    Task_Next();
+  }
+
+  PID sender_id = Cp->sender_pid;
+  *v = Process[sender_id].msg.msg;
+  // received message, reset exists
+  Cp->msg.exists = false;
+
+ return sender_id;
+}
+
+void Msg_Rply( PID  id, unsigned int r ) {
+  if(Process[id].status == C_RECV_BLOCK) {
+    //notify receiver about message
+    Process[id].msg.exists = true;
+    // copy msg to local buffer
+    Process[id].sender_pid = Cp->pid;
+    Cp->msg.msg_type = PUT;
+    Cp->msg.recv_type = REPLY;
+    Cp->msg.msg = r;
+    Task_Next();
+  }
+}
+
+void Msg_ASend( PID  id, MTYPE t, unsigned int v ) {
+
+  //can i send
+  // bool in_receive_block = (Process[id].status != S_RECV_BLOCK);
+  // bool wrong_type = ((Process[id].status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0));
+  // printf("condition1: %d, condition2: %d\n", in_receive_block, wrong_type);
+  while( (Process[id].status != S_RECV_BLOCK) || 
+      ((Process[id].status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0))
+    ) {
+    //send block
+    Cp->status = SEND_BLOCK;
+    Task_Next();    
+  }
+
+  //notify receiver about message
+  Process[id].msg.exists = true;
+  // copy msg to local buffer
+  Process[id].sender_pid = Cp->pid;
+  Cp->msg.msg_type = PUT;
+  Cp->msg.recv_type = SEND;
+  Cp->msg.msg = v;
+}
+
+/*============
+  * A Simple Test 
+  *============
+  */
 
 void OS_Abort(unsigned int error)
 {
@@ -489,6 +579,42 @@ void OS_Abort(unsigned int error)
     // toggle_LED_B3();
     _delay_ms(500);
   }
+}
+
+void sender()
+{
+    unsigned int v = 9;
+    printf("sender sent: %d\n", v);
+    Msg_Send( 2, GET, &v );
+    printf("sender recieved: %d\n", v);
+
+    // unsigned int v = 9;
+    // Msg_ASend( 2, PUT, v );
+    // printf("sender asend: %d\n", v);
+}
+
+void reciever()
+{
+  unsigned int v = 0;
+  PID reply_pid = Msg_Recv( ALL, &v );
+  printf("reciever recieved: %d\n", v);
+  Msg_Rply( reply_pid, 4);
+
+  // unsigned int v = 0;
+  // PID reply_pid = Msg_Recv( PUT, &v );
+  // printf("reciever recieved: %d\n", v);
+  // Msg_Rply( reply_pid, 4);
+}
+
+
+void Ping()
+{
+  printf("Started Ping\n");
+  toggle_LED_B5();
+  _delay_ms(500);
+  toggle_LED_B5();
+  // Task_Create_RR(Pong, 0);
+  printf("Finished Ping\n");
 }
 
 void Pong()
@@ -501,23 +627,12 @@ void Pong()
   // Task_Create_System(Ping, 0);
 }
 
-void Ping()
-{
-  printf("Started Ping\n");
-  toggle_LED_B5();
-  _delay_ms(500);
-  toggle_LED_B5();
-  // Task_Create_RR(Pong, 0);
-  printf("Finished Ping\n");
-}
-
 /**
   * This function creates two cooperative tasks, "Ping" and "Pong". Both
   * will run forever.
   */
 void main()
 {
-
   uart_init();
   stdout = &uart_output;
   stdin = &uart_input;
@@ -544,13 +659,8 @@ void main()
   OS_Init();
   
   Task_Create_RR(idle_func, 0);
-  // deque(&RR_TASKS);
-  // Task_Create_System(Ping, 0);
-  Task_Create_Period(Ping, 0, 6, 1, 3);
+  Task_Create_System(sender, 0);
+  Task_Create_System(reciever, 0);
 
-  // Task_Create_System(Pong, 0);
-  // // Task_Create_RR(Pong, 0);
-  // // Task_Create_RR(Pong, 0);
   OS_Start();
-
 }
