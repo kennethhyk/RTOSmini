@@ -62,6 +62,15 @@ typedef struct Msg_Des{
     // struct Msg_Des *next;
 } Msg_Des;
 
+typedef struct Async_Msg_Des{
+    PID sender_pid; 
+    bool exists;
+    MSG_TYPE msg_type;
+    RECV_TYPE recv_type;
+    unsigned int msg;
+    // struct Msg_Des *next;
+} Async_Msg_Des;
+
 /**
   *  This is the set of all possible priority levels for a task
   */
@@ -106,6 +115,7 @@ typedef struct process_descriptor
   IPC_STATES ipc_status;
   MSG_TYPE listen_to;
   Msg_Des msg;
+  Async_Msg_Des async_msg;
   int arg; // integer function argument
   unsigned char *sp; // stack pointer for process memory
   unsigned char workSpace[WORKSPACE];

@@ -76,8 +76,11 @@ static PD *Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
       Process[x].ipc_status = NONE_STATE;
       Process[x].listen_to = ALL;
       Process[x].sender_pid = INIT_SENDER_PID;
-      // empty msg descriptor
+
+      // empty msg descriptors
       memset(&Process[x].msg, 0, sizeof(Msg_Des));
+      memset(&Process[x].async_msg, 0, sizeof(Async_Msg_Des));
+      
       p = &(Process[x]);
       break;
     }
@@ -224,7 +227,6 @@ static void Dispatch()
     // go through the q and find
     while ( is_ipc_blocked(peek(&RR_TASKS)) )
     { 
-      printf("am i here;");
       // idle task exists in rrq so this loop WILL terminate
       enqueue(&RR_TASKS, deque(&RR_TASKS));
     }
@@ -236,7 +238,7 @@ static void Dispatch()
     OS_Abort(1);
   }
 
-  printf("Current process: %d\n", Cp->pid);
+  // printf("Current process: %d\n", Cp->pid);
   CurrentSp = Cp->sp;
   Cp->state = RUNNING;
 }
@@ -512,7 +514,7 @@ void Msg_Send(PID id, MTYPE t, unsigned int *v)
   }
 
   //can i send
-  printf("Receiver ipc_status: %d\n", Process[id].ipc_status);
+  // printf("Receiver ipc_status: %d\n", Process[id].ipc_status);
   while ((Process[id].ipc_status != S_RECV_BLOCK) ||
          ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0)))
   {
@@ -524,9 +526,9 @@ void Msg_Send(PID id, MTYPE t, unsigned int *v)
       Process[id].sender_pid = Cp->pid;
     }
 
-    printf("Before send block");
+    // printf("Before send block");
     Task_Next();
-    printf("after send block");
+    // printf("after send block");
   }
   
   // to block other senders sending
@@ -542,7 +544,7 @@ void Msg_Send(PID id, MTYPE t, unsigned int *v)
   Cp->msg.msg_type = t;
   Cp->msg.recv_type = SEND;
   Cp->msg.msg = *v;
-  printf("Copied message to local buffer:\n");
+  // printf("Copied message to local buffer:\n");
 
   // enter reply block
   while (Cp->msg.exists == false)
@@ -567,7 +569,7 @@ PID Msg_Recv(MASK m, unsigned int *v)
   Cp->listen_to = m;
   int count = 0;
   // no sender sent message
-  while (Cp->msg.exists == false)
+  while ((Cp->msg.exists == false) && (Cp->async_msg.exists == false))
   {
     // recv block
     Cp->ipc_status = S_RECV_BLOCK;
@@ -582,23 +584,31 @@ PID Msg_Recv(MASK m, unsigned int *v)
       Process[Cp->sender_pid].ipc_status = NONE_STATE;
 
     }
-    count++;
-    printf("count: %d", count);
+
     Task_Next();
   }
 
-  // pick up message
-  PID sender_id = Cp->sender_pid;
-  
-  // unblock sender
+  if (Cp->msg.exists){
+    // pick up message
+    PID sender_id = Cp->sender_pid;
+    // get msg
+    *v = Process[sender_id].msg.msg;
+    // received message, reset exists
+    Cp->msg.exists = false;
+    return sender_id;
+  } else if (Cp->async_msg.exists) {  
+     // pick up message
+    PID sender_id = Cp->async_msg.sender_pid;
+    // get msg
+    *v = Cp->async_msg.msg;
+    // received message, reset exists
+    Cp->async_msg.exists = false;
+    return sender_id;
+  }
 
-  // get msg
-  *v = Process[sender_id].msg.msg;
+  printf("PROBLEM HERE");
+  return;
 
-  // received message, reset exists
-  Cp->msg.exists = false;
-
-  return sender_id;
 }
 
 void Msg_Rply(PID id, unsigned int r)
@@ -626,26 +636,36 @@ void Msg_Rply(PID id, unsigned int r)
 
 void Msg_ASend(PID id, MTYPE t, unsigned int v)
 {
+  if (id >= 16)
+  {
+    printf("ERROR SENDING MSG TO PID: %d\n", id);
+    return;
+    // OS_Abort(2);
+  }
 
   //can i send
   // bool in_receive_block = (Process[id].ipc_status != S_RECV_BLOCK);
   // bool wrong_type = ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0));
   // printf("condition1: %d, condition2: %d\n", in_receive_block, wrong_type);
-  while ((Process[id].ipc_status != S_RECV_BLOCK) ||
+  if ((Process[id].ipc_status != S_RECV_BLOCK) ||
          ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0)))
   {
-    //send block
-    Cp->ipc_status = SEND_BLOCK;
-    Task_Next();
+    // receiver not waiting,
+    // return async send
+    printf("Nobody is waiting.\n");
+    return;
   }
 
   //notify receiver about message
-  Process[id].msg.exists = true;
-  // copy msg to local buffer
-  Process[id].sender_pid = Cp->pid;
-  Cp->msg.msg_type = PUT;
-  Cp->msg.recv_type = SEND;
-  Cp->msg.msg = v;
+  Process[id].async_msg.exists = true;
+  // copy msg to receiver buffer
+  Process[id].async_msg.msg_type = t;
+  Process[id].async_msg.sender_pid = Cp->pid;
+  Process[id].async_msg.msg = v;
+  Process[id].async_msg.recv_type = SEND;
+
+  // unblock receiver
+  Process[id].ipc_status = NONE_STATE;
 }
 
 /*============
@@ -666,10 +686,9 @@ void OS_Abort(unsigned int error)
 void sender()
 {
   unsigned int v = 9;
+  Msg_ASend(1, GET, v);
   printf("sender sent: %d\n", v);
-  Msg_Send(1, GET, &v);
-  printf("sender recieved: %d\n", v);
-
+  Task_Next();
   // unsigned int v = 9;
   // Msg_ASend( 2, PUT, v );
   // printf("sender asend: %d\n", v);
