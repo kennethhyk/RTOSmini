@@ -10,6 +10,7 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
+#include "tests/ipc-tests.c"
 
 #define DEBUG 1
 
@@ -149,7 +150,6 @@ PID Task_Create_System(voidfuncptr f, int arg)
 // Creates RR task and enqueues into RR_TASKS queue
 PID Task_Create_RR(voidfuncptr f, int arg)
 {
-  printf("Creating rr tasks;");
   PD *p = Kernel_Create_Task(f, arg, RR);
   if (p == NULL)
   {
@@ -336,7 +336,7 @@ static void Next_Kernel_Request()
         break;
       }
 
-      printf("dispatching\n");
+      // printf("dispatching\n");
       // choose new task to run
       Dispatch();
       break;
@@ -566,6 +566,7 @@ void Msg_Send(PID id, MTYPE t, unsigned int *v)
 
 PID Msg_Recv(MASK m, unsigned int *v)
 {
+  printf("reciever id: %d", Cp->pid);
   Cp->listen_to = m;
   int count = 0;
   // no sender sent message
@@ -573,13 +574,10 @@ PID Msg_Recv(MASK m, unsigned int *v)
   {
     // recv block
     Cp->ipc_status = S_RECV_BLOCK;
-    // give up processor
-    printf("in msg rcev, receive blocked\n");
     
     // don't know which sender to unblock
     // so check if sender set my sender_pid
     // if so, unblock sender
-    printf("Current sender pid: %d\n", Cp->sender_pid);
     if (Cp->sender_pid != INIT_SENDER_PID){
       Process[Cp->sender_pid].ipc_status = NONE_STATE;
 
@@ -630,7 +628,6 @@ void Msg_Rply(PID id, unsigned int r)
     // block myself to persist data
     Cp->ipc_status = SEND_BLOCK;
     Task_Next();
-    printf("theres only one task in system q haha.\n");
   }
 }
 
@@ -652,7 +649,6 @@ void Msg_ASend(PID id, MTYPE t, unsigned int v)
   {
     // receiver not waiting,
     // return async send
-    printf("Nobody is waiting.\n");
     return;
   }
 
@@ -681,31 +677,6 @@ void OS_Abort(unsigned int error)
     // toggle_LED_B3();
     _delay_ms(500);
   }
-}
-
-void sender()
-{
-  unsigned int v = 9;
-  Msg_ASend(1, GET, v);
-  printf("sender sent: %d\n", v);
-  Task_Next();
-  // unsigned int v = 9;
-  // Msg_ASend( 2, PUT, v );
-  // printf("sender asend: %d\n", v);
-}
-
-void receiver()
-{
-  unsigned int v = 0;
-  // printf("reciever entered\n");
-  PID reply_pid = Msg_Recv(ALL, &v);
-  printf("reciever recieved: %d\n", v);
-  Msg_Rply(reply_pid, 4);
-
-  // unsigned int v = 0;
-  // PID reply_pid = Msg_Recv( PUT, &v );
-  // printf("reciever recieved: %d\n", v);
-  // Msg_Rply( reply_pid, 4);
 }
 
 void Ping()
@@ -760,8 +731,7 @@ void main()
   OS_Init();
 
   Task_Create_RR(idle_func, 0);
-  Task_Create_System(receiver, 0);
-  Task_Create_System(sender, 0);
+  Task_Create_System(a_main, 0);
 
   OS_Start();
 }
