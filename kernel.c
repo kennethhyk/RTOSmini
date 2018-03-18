@@ -197,6 +197,7 @@ bool is_ipc_blocked(PD * p){
   // printf("ipc_status, pid: %d , %d\n", p->ipc_status, p->pid);
   return (p->ipc_status == C_RECV_BLOCK) || (p->ipc_status == S_RECV_BLOCK) || (p->ipc_status == SEND_BLOCK);
 }
+
 /**
   * This internal kernel function is a part of the "scheduler". It chooses the 
   * next task to run, i.e., Cp.
@@ -285,9 +286,12 @@ static void Next_Kernel_Request()
       case PERIODIC:
         // reduce ticks
         Cp->remaining_ticks--;
-        if (Cp->remaining_ticks <= 0)
+        if (Cp->remaining_ticks < 0)
         {
+          // periodic task running longer
+          // than its supposed to run
           // not good
+          // consider calling task terminate
           OS_Abort(-1);
         }
         break;
@@ -453,8 +457,10 @@ void Task_Terminate()
   Cp->sender_pid = INIT_SENDER_PID;
   Cp->ipc_status = NONE_STATE;
   Cp->listen_to = ALL;
-  // clear msg descriptor
+  
+  // clear msg descriptors
   memset(&Cp->msg, 0, sizeof(Msg_Des));
+  memset(&Cp->async_msg, 0, sizeof(Async_Msg_Des));
 
   Enter_Kernel();
   /* never returns here! */
