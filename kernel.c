@@ -10,7 +10,7 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
-#include "./tests/os/test_periodic.c"
+// #include "./tests/os/test_periodic.c"
 
 #define DEBUG 1
 
@@ -500,7 +500,7 @@ void idle_func()
   }
 }
 
-// 20ms
+// 10ms
 void init_timer()
 {
   TCCR1A = 0;
