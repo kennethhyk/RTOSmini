@@ -16,6 +16,7 @@ typedef void (*voidfuncptr) (void);
   * again, but Cp is not running any more.
   * (See file "switch.S" for details.)
   */
+  
 extern void CSwitch();
 extern void Exit_Kernel();    /* this is the same as CSwitch() */
 

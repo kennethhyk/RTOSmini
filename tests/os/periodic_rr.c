@@ -18,8 +18,8 @@ void Ding()
 
 void a_main(){
     Task_Create_RR(Ping, 0);
-    Task_Create_Period(Pong, 0, 30, 5, 7);
-    Task_Create_Period(Ding, 0, 15, 5, 3);
+    Task_Create_Period(Pong, 0, 30, 5, 0);
+    Task_Create_Period(Ding, 0, 30, 5, 15);
     // expect to see each task start and finish in order of:
     // ding, pong, ping
 }

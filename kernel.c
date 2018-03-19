@@ -10,11 +10,29 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
-//tests
-#include "tests/test_ipc_reply_block.c"
+
+//tests - ipc
+// #include "tests/ipc/ipc_receiver_mask.c"
+// #include "tests/ipc/ipc_Asend_succeed.c"
+// #include "tests/ipc/ipc_reply_block.c"
+// #include "tests/ipc/ipc_RR(send)ToSystem(receive).c"
+// #include "tests/ipc/ipc_send_block.c"
+// #include "tests/ipc/ipc_RRToRR.c"
+// #include "tests/ipc/ipc_systemToSystem.c"
+// #include "tests/ipc/ipc_System(send)ToRR(receive).c"
+// #include "tests/ipc/ipc_Asend_fail_receiving.c"
+
+// tests -os
+// #include "tests/os/periodic.c"
+// #include "tests/os/rr.c"
+// #include "tests/os/system_periodic.c"
+// #include "tests/os/periodic_rr.c"
+// #include "tests/os/system.c"
+// #include "tests/os/system_rr.c"
 
 #define DEBUG 1
 
+ 
 /**
   * This table contains ALL process descriptors. It doesn't matter what
   * state a task is in.
@@ -44,7 +62,7 @@ static volatile unsigned int KernelActive;
 static volatile unsigned int TotalTasks;
 
 // Tick count in order to schedule periodic tasks
-volatile unsigned int num_ticks;
+volatile unsigned int num_ticks = 0;
 
 /**
   * This is a "shadow" copy of the stack pointer of "Cp", the currently
@@ -170,14 +188,15 @@ PID Task_Create_Period(voidfuncptr f, int arg, TICK period, TICK wcet, TICK offs
     return -1; // Too many tasks :(
   }
 
-  enqueue_in_start_order(&PERIODIC_TASKS, p);
-
   // set periodic task specific attributes
   p->period = period;
   p->wcet = wcet;
   p->start_time = num_ticks + offset;
-  p->next_start = p->start_time + period;
+  // printf("Start time: %d\n", p->start_time);
   p->remaining_ticks = wcet;
+
+   enqueue_in_start_order(&PERIODIC_TASKS, p);
+
   return p->pid;
 }
 
@@ -284,16 +303,19 @@ static void Next_Kernel_Request()
       case PERIODIC:
         // reduce ticks
         Cp->remaining_ticks--;
+        // printf("%d\n", Cp->remaining_ticks);
         if (Cp->remaining_ticks == 0)
         {
           // periodic task running longer
           // than its supposed to run
           // kill task
-          // deque(&PERIODIC_TASKS);
-          // Cp->request = TERMINATE;
-          // Cp->state = DEAD;
-          // OS_Kill_Task(Cp->pid);
-          // consider calling task terminate
+          deque(&PERIODIC_TASKS);
+          Cp->request = TERMINATE;
+          Cp->state = DEAD;
+          Cp->sender_pid = INIT_SENDER_PID;
+          Cp->ipc_status = NONE_STATE;
+          Cp->listen_to = ALL;
+         // consider calling task terminate
         }
         break;
       case RR:
@@ -366,12 +388,18 @@ static void Next_Kernel_Request()
         // periodic tasks run forever
         // reset in q
         deque(&PERIODIC_TASKS);
-        Cp->request = TERMINATE;
-        Cp->state = DEAD;
-        Cp->sender_pid = INIT_SENDER_PID;
-        Cp->ipc_status = NONE_STATE;
-        Cp->listen_to = ALL;
-        Task_Create_Period(Cp->code, Cp->arg, Cp->period, Cp->wcet, 0); 
+        // enqueue_in_start_order(&PERIODIC_TASKS, );
+
+        // Cp->request = NONE;
+        // Cp->state = READY;
+        // Cp->sender_pid = INIT_SENDER_PID;
+        // Cp->ipc_status = NONE_STATE;
+        // Cp->listen_to = ALL;
+        // printf("Period: %d\n", Cp->period);
+        // printf("New offset: %d\n", Cp->period - (Cp->wcet - Cp->remaining_ticks));
+        TICK timeran = Cp->wcet - Cp->remaining_ticks;
+        TICK offset = Cp->period - timeran;
+        Task_Create_Period(Cp->code, Cp->arg, Cp->period, Cp->wcet, offset);
         break;
       case RR:
         deque(&RR_TASKS);
@@ -518,7 +546,9 @@ void init_timer()
 
   TCNT1 = 0; //initialize counter value to 0
   // set compare match register for 1hz increments
-  OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
+  TCCR1B |= (1 << WGM12);
+  // OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
+  OCR1A = 7000;
   // Set CS10 and CS12 bits for 1024 prescaler
   TCCR1B |= (1 << CS12) | (1 << CS10);
 
@@ -528,8 +558,9 @@ void init_timer()
 
 ISR(TIMER1_COMPA_vect)
 {
-  toggle_LED_B3();
+  // toggle_LED_B3();
   num_ticks++;
+  printf("%d\n", num_ticks);
   OS_DI();
   Cp->request = TIMER;
   Enter_Kernel();
@@ -675,6 +706,15 @@ void OS_Abort(unsigned int error)
   }
 }
 
+void Pong()
+{
+  printf("Executed pong\n");
+}
+
+void Ding()
+{
+  printf("Executed Ding\n");
+}
 
 /**
   * This function creates two cooperative tasks, "Ping" and "Pong". Both
@@ -696,7 +736,9 @@ void main()
   OS_Init();
 
   Task_Create_RR(idle_func, 0);
-  Task_Create_System(a_main, 0);
+  // Task_Create_System(a_main, 0);
+  Task_Create_Period(Pong, 0, 10, 1, 6);
+  Task_Create_Period(Ding, 0,10, 1, 6);
 
   OS_Start();
   printf("=====_OS_END_====\n");

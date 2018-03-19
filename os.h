@@ -7,7 +7,7 @@
 // #endif
 #define MAXTHREAD 16        // Incremented by 1 to account for idle_tacwk
 #define WORKSPACE 256       // in bytes, per THREAD
-#define MSECPERTICK 10      // resolution of a system TICK in milliseconds
+#define MSECPERTICK 20      // resolution of a system TICK in milliseconds
 #define INIT_SENDER_PID 999 // dead ipc pid
 
 #define TRUE 1
