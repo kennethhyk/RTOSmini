@@ -59,7 +59,6 @@ typedef struct Msg_Des{
     MSG_TYPE msg_type;
     RECV_TYPE recv_type;
     unsigned int msg;
-    // struct Msg_Des *next;
 } Msg_Des;
 
 typedef struct Async_Msg_Des{
@@ -68,7 +67,6 @@ typedef struct Async_Msg_Des{
     MSG_TYPE msg_type;
     RECV_TYPE recv_type;
     unsigned int msg;
-    // struct Msg_Des *next;
 } Async_Msg_Des;
 
 /**
