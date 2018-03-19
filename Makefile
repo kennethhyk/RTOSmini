@@ -1,2 +1,2 @@
 clean:
-	rm *.o *.hex *.elf
+	rm *.o *.hex *.elf *.h.gch

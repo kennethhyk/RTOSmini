@@ -10,6 +10,7 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
+// #include "./tests/os/test_system_rr.c"
 
 #define DEBUG 1
 
@@ -149,7 +150,6 @@ PID Task_Create_System(voidfuncptr f, int arg)
 // Creates RR task and enqueues into RR_TASKS queue
 PID Task_Create_RR(voidfuncptr f, int arg)
 {
-  printf("Creating rr tasks;");
   PD *p = Kernel_Create_Task(f, arg, RR);
   if (p == NULL)
   {
@@ -197,6 +197,7 @@ bool is_ipc_blocked(PD * p){
   // printf("ipc_status, pid: %d , %d\n", p->ipc_status, p->pid);
   return (p->ipc_status == C_RECV_BLOCK) || (p->ipc_status == S_RECV_BLOCK) || (p->ipc_status == SEND_BLOCK);
 }
+
 /**
   * This internal kernel function is a part of the "scheduler". It chooses the 
   * next task to run, i.e., Cp.
@@ -285,10 +286,16 @@ static void Next_Kernel_Request()
       case PERIODIC:
         // reduce ticks
         Cp->remaining_ticks--;
-        if (Cp->remaining_ticks <= 0)
+        if (Cp->remaining_ticks == 0)
         {
-          // not good
-          OS_Abort(-1);
+          // periodic task running longer
+          // than its supposed to run
+          // kill task
+          // deque(&PERIODIC_TASKS);
+          // Cp->request = TERMINATE;
+          // Cp->state = DEAD;
+          // OS_Kill_Task(Cp->pid);
+          // consider calling task terminate
         }
         break;
       case RR:
@@ -359,13 +366,14 @@ static void Next_Kernel_Request()
         break;
       case PERIODIC:
         // periodic tasks run forever
-        // so reset in q
+        // reset in q
         deque(&PERIODIC_TASKS);
-        Cp->start_time = Cp->next_start;
-        Cp->next_start += Cp->period;
-        Cp->state = READY;
-        Cp->request = NONE;
-        enqueue_in_start_order(&PERIODIC_TASKS, Cp);
+        Cp->request = TERMINATE;
+        Cp->state = DEAD;
+        Cp->sender_pid = INIT_SENDER_PID;
+        Cp->ipc_status = NONE_STATE;
+        Cp->listen_to = ALL;
+        Task_Create_Period(Cp->code, Cp->arg, Cp->period, Cp->wcet, 0); 
         break;
       case RR:
         deque(&RR_TASKS);
@@ -446,18 +454,40 @@ void Task_Next()
 void Task_Terminate()
 {
   OS_DI();
+
   Cp->request = TERMINATE;
   Cp->state = DEAD;
-  TotalTasks--;
-
   Cp->sender_pid = INIT_SENDER_PID;
   Cp->ipc_status = NONE_STATE;
   Cp->listen_to = ALL;
-  // clear msg descriptor
+
+  TotalTasks--;
+ 
+  // clear msg descriptors
   memset(&Cp->msg, 0, sizeof(Msg_Des));
+  memset(&Cp->async_msg, 0, sizeof(Async_Msg_Des));
 
   Enter_Kernel();
   /* never returns here! */
+}
+
+/**
+  * The calling task terminates itself.
+  */
+void OS_Kill_Task(PID pid)
+{
+  PD * p = &Process[pid];
+  p->request = TERMINATE;
+  p->state = DEAD;
+  p->sender_pid = INIT_SENDER_PID;
+  p->ipc_status = NONE_STATE;
+  p->listen_to = ALL;
+  
+  TotalTasks--;
+  
+  // clear msg descriptors
+  memset(&p->msg, 0, sizeof(Msg_Des));
+  memset(&p->async_msg, 0, sizeof(Async_Msg_Des));
 }
 
 void idle_func()
@@ -470,29 +500,32 @@ void idle_func()
   }
 }
 
+// 10ms
+// void init_timer()
+// {
+//   TCCR1A = 0;
+//   TCCR1B = 0;
+//   OCR1A = 15999;
+//   TCCR1B |= (1 << WGM12);
+//   TCCR1B |= (1 << CS00);
+//   TIMSK1 |= (1 << OCIE1A);
+// }
+
+// 1s
 void init_timer()
 {
   //Clear timer config.
   TCCR1A = 0; // set entire TCCR1A register to 0
   TCCR1B = 0; // same for TCCR1B
 
-  // OCR1A = 15999;       // for 10ms
-  // turn on CTC mode
-  TCCR1B |= (1 << WGM12);
-  // TCCR1B |= (1 << CS00); // for 10ms
-  // TIMSK1 |= (1 << OCIE1A); // for 10ms
-
-  // for 1s
   TCNT1 = 0; //initialize counter value to 0
   // set compare match register for 1hz increments
   OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
   // Set CS10 and CS12 bits for 1024 prescaler
   TCCR1B |= (1 << CS12) | (1 << CS10);
-  // for 1s
 
   // enable timer compare interrupt
   TIMSK1 |= (1 << OCIE1A);
-  // OS_EI();
 }
 
 ISR(TIMER1_COMPA_vect)
@@ -708,26 +741,6 @@ void receiver()
   // Msg_Rply( reply_pid, 4);
 }
 
-void Ping()
-{
-  printf("Started Ping\n");
-  toggle_LED_B5();
-  _delay_ms(500);
-  toggle_LED_B5();
-  // Task_Create_RR(Pong, 0);
-  printf("Finished Ping\n");
-}
-
-void Pong()
-{
-  printf("started pong\n");
-  toggle_LED_B6();
-  _delay_ms(4000);
-  toggle_LED_B6();
-  printf("finished pong\n");
-  // Task_Create_System(Ping, 0);
-}
-
 /**
   * This function creates two cooperative tasks, "Ping" and "Pong". Both
   * will run forever.
@@ -743,25 +756,15 @@ void main()
   init_LED_B6();
   init_LED_B3();
 
-  // test lights
-  // for(;;){
-  // toggle_LED_B6();
-  // _delay_ms(500);
-  // toggle_LED_B5();
-  // _delay_ms(500);
-  // toggle_LED_B3();
-  // _delay_ms(500);
-  // toggle_LED_idle();
-  // _delay_ms(500);
-  // }
-
-  printf("=========\n");
+  printf("=====_OS_START_====\n");
   // clear memory and prepare queues
   OS_Init();
 
   Task_Create_RR(idle_func, 0);
-  Task_Create_System(receiver, 0);
-  Task_Create_System(sender, 0);
+  // Task_Create_Period(Ding, 0, 30, 5, 7);
+  Task_Create_System(a_main, 0);
 
   OS_Start();
+  printf("=====_OS_END_====\n");
+
 }
