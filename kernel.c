@@ -10,7 +10,7 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
-// #include "./tests/os/test_periodic.c"
+// #include "./tests/os/test_system_rr.c"
 
 #define DEBUG 1
 
@@ -501,32 +501,32 @@ void idle_func()
 }
 
 // 10ms
-void init_timer()
-{
-  TCCR1A = 0;
-  TCCR1B = 0;
-  OCR1A = 15999;
-  TCCR1B |= (1 << WGM12);
-  TCCR1B |= (1 << CS00);
-  TIMSK1 |= (1 << OCIE1A);
-}
-
-// 1s
 // void init_timer()
 // {
-//   //Clear timer config.
-//   TCCR1A = 0; // set entire TCCR1A register to 0
-//   TCCR1B = 0; // same for TCCR1B
-
-//   TCNT1 = 0; //initialize counter value to 0
-//   // set compare match register for 1hz increments
-//   OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
-//   // Set CS10 and CS12 bits for 1024 prescaler
-//   TCCR1B |= (1 << CS12) | (1 << CS10);
-
-//   // enable timer compare interrupt
+//   TCCR1A = 0;
+//   TCCR1B = 0;
+//   OCR1A = 15999;
+//   TCCR1B |= (1 << WGM12);
+//   TCCR1B |= (1 << CS00);
 //   TIMSK1 |= (1 << OCIE1A);
 // }
+
+// 1s
+void init_timer()
+{
+  //Clear timer config.
+  TCCR1A = 0; // set entire TCCR1A register to 0
+  TCCR1B = 0; // same for TCCR1B
+
+  TCNT1 = 0; //initialize counter value to 0
+  // set compare match register for 1hz increments
+  OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
+  // Set CS10 and CS12 bits for 1024 prescaler
+  TCCR1B |= (1 << CS12) | (1 << CS10);
+
+  // enable timer compare interrupt
+  TIMSK1 |= (1 << OCIE1A);
+}
 
 ISR(TIMER1_COMPA_vect)
 {
