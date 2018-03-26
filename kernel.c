@@ -31,7 +31,6 @@
 // #include "tests/os/system_rr.c"
 
 #define DEBUG 1
-
  
 /**
   * This table contains ALL process descriptors. It doesn't matter what
@@ -95,8 +94,8 @@ static PD *Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
       Process[x].sender_pid = INIT_SENDER_PID;
 
       // empty msg descriptors
-      memset(&Process[x].msg, 0, sizeof(Msg_Des));
-      memset(&Process[x].async_msg, 0, sizeof(Async_Msg_Des));
+      memset(&Process[x].msg, 0, sizeof(msg_desc));
+      memset(&Process[x].async_msg, 0, sizeof(async_msg_desc));
       
       p = &(Process[x]);
       break;
@@ -384,26 +383,18 @@ static void Next_Kernel_Request()
       case SYSTEM:
         deque(&SYSTEM_TASKS);
         break;
+
       case PERIODIC:
         // periodic tasks run forever
         // reset in q
         deque(&PERIODIC_TASKS);
-        // enqueue_in_start_order(&PERIODIC_TASKS, );
-
-        // Cp->request = NONE;
-        // Cp->state = READY;
-        // Cp->sender_pid = INIT_SENDER_PID;
-        // Cp->ipc_status = NONE_STATE;
-        // Cp->listen_to = ALL;
-        // printf("Period: %d\n", Cp->period);
-        // printf("New offset: %d\n", Cp->period - (Cp->wcet - Cp->remaining_ticks));
         TICK timeran = Cp->wcet - Cp->remaining_ticks;
         TICK offset = Cp->period - timeran;
         Task_Create_Period(Cp->code, Cp->arg, Cp->period, Cp->wcet, offset);
         break;
+
       case RR:
         deque(&RR_TASKS);
-        // toggle_LED_B6();
         break;
       }
 
@@ -490,8 +481,8 @@ void Task_Terminate()
   TotalTasks--;
  
   // clear msg descriptors
-  memset(&Cp->msg, 0, sizeof(Msg_Des));
-  memset(&Cp->async_msg, 0, sizeof(Async_Msg_Des));
+  memset(&Cp->msg, 0, sizeof(msg_desc));
+  memset(&Cp->async_msg, 0, sizeof(async_msg_desc));
 
   Enter_Kernel();
   /* never returns here! */
@@ -512,8 +503,8 @@ void OS_Kill_Task(PID pid)
   TotalTasks--;
   
   // clear msg descriptors
-  memset(&p->msg, 0, sizeof(Msg_Des));
-  memset(&p->async_msg, 0, sizeof(Async_Msg_Des));
+  memset(&p->msg, 0, sizeof(msg_desc));
+  memset(&p->async_msg, 0, sizeof(async_msg_desc));
 }
 
 void idle_func()
@@ -691,9 +682,9 @@ void Msg_ASend(PID id, MTYPE t, unsigned int v)
   Process[id].ipc_status = NONE_STATE;
 }
 
-/*============
-  * A Simple Test 
-  *============
+/*================= -
+  * A Simple Test   |
+  *================ -
   */
 
 void OS_Abort(unsigned int error)

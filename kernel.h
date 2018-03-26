@@ -1,6 +1,6 @@
 
 /* pointer to void f(void) */
-typedef void (*voidfuncptr) (void);
+typedef void (*voidfuncptr)(void);
 
 /**
   * This internal kernel function is the context switching mechanism.
@@ -16,9 +16,9 @@ typedef void (*voidfuncptr) (void);
   * again, but Cp is not running any more.
   * (See file "switch.S" for details.)
   */
-  
+
 extern void CSwitch();
-extern void Exit_Kernel();    /* this is the same as CSwitch() */
+extern void Exit_Kernel(); /* this is the same as CSwitch() */
 
 /**
   * This external function could be implemented in two ways:
@@ -34,50 +34,16 @@ extern void Exit_Kernel();    /* this is the same as CSwitch() */
 extern void Enter_Kernel();
 
 //========================
-//  RTOS Internal      
+//  RTOS Internal
 //========================
-typedef enum IPC_STATES {
-  NONE_STATE = 0,
-  C_RECV_BLOCK,
-  S_RECV_BLOCK,
-  SEND_BLOCK,
-} IPC_STATES;
-
-typedef enum MSG_TYPE {
-  ALL = 0xFF,
-  GET = 0x01,
-  REQUEST = 0x02,
-  PUT = 0x04
-} MSG_TYPE;
-
-typedef enum RECV_TYPE {
-  SEND = 0,
-  REPLY
-} RECV_TYPE;
-
-typedef struct Msg_Des{
-    bool exists;
-    MSG_TYPE msg_type;
-    RECV_TYPE recv_type;
-    unsigned int msg;
-} Msg_Des;
-
-typedef struct Async_Msg_Des{
-    PID sender_pid; 
-    bool exists;
-    MSG_TYPE msg_type;
-    RECV_TYPE recv_type;
-    unsigned int msg;
-} Async_Msg_Des;
 
 /**
   *  This is the set of all possible priority levels for a task
   */
-typedef enum priority_levels
-{
-	SYSTEM = 0,
-	PERIODIC,
-	RR,
+typedef enum priority_levels {
+  SYSTEM = 0,
+  PERIODIC,
+  RR,
   IDLE
 } PRIORITY_LEVEL;
 
@@ -103,33 +69,87 @@ typedef enum kernel_request_type {
 } KERNEL_REQUEST_TYPE;
 
 /**
+  * Set of possible IPC states, for SEND-RECEIVE-REPLY
+  */
+typedef enum IPC_STATES {
+  NONE_STATE = 0,
+  C_RECV_BLOCK,
+  S_RECV_BLOCK,
+  SEND_BLOCK,
+} IPC_STATES;
+
+/**
+  * Set of possible message types
+  */
+typedef enum MSG_TYPE {
+  ALL = 0xFF,
+  GET = 0x01,
+  REQUEST = 0x02,
+  PUT = 0x04
+} MSG_TYPE;
+
+typedef enum RECV_TYPE {
+  SEND = 0,
+  REPLY
+} RECV_TYPE;
+
+/**
+  * Structure for storing SRR messages
+  */
+typedef struct msg_desc
+{
+  bool exists;
+  MSG_TYPE msg_type;
+  RECV_TYPE recv_type;
+  unsigned int msg;
+} msg_desc;
+
+/**
+  * Structure for storing asynchronous messages
+  */
+typedef struct async_msg_desc
+{
+  PID sender_pid;
+  bool exists;
+  MSG_TYPE msg_type;
+  RECV_TYPE recv_type;
+  unsigned int msg;
+} async_msg_desc;
+
+/**
   * Each task is represented by a process descriptor, which contains all
   * relevant information about this task. For convenience, we also store
   * the task's stack, i.e., its workspace, in here.
   */
 typedef struct process_descriptor
 {
+  // core process attributes
   PID pid;
-  PID sender_pid;
-  IPC_STATES ipc_status;
-  MSG_TYPE listen_to;
-  Msg_Des msg;
-  Async_Msg_Des async_msg;
-  int arg; // integer function argument
+  int arg;           // integer function argument
   unsigned char *sp; // stack pointer for process memory
   unsigned char workSpace[WORKSPACE];
+  PROCESS_STATES state;
+  voidfuncptr code; // function to be executed as part of task
+  KERNEL_REQUEST_TYPE request;
+  PRIORITY_LEVEL priority;
+  struct process_descriptor *next; //  next item in q for process
+  // periodic task attributes
   TICK period;
   TICK wcet;
   TICK start_time;
   TICK remaining_ticks;
   TICK next_start;
-  PROCESS_STATES state;
-  voidfuncptr code; // function to be executed as part of task
-  KERNEL_REQUEST_TYPE request;
-  struct process_descriptor * next; //  next item in q for process
-  PRIORITY_LEVEL priority;
+  // ipc attributes
+  PID sender_pid;
+  IPC_STATES ipc_status;
+  MSG_TYPE listen_to;
+  msg_desc msg;
+  async_msg_desc async_msg;
 } PD;
 
+/**
+  * Structure defining a message queue
+  */
 typedef struct queue
 {
   char name[10];
@@ -150,17 +170,17 @@ void init_timer();
 /** Function to kill task */
 void Task_Terminate();
 
-void init_queue(task_queue * q); 
-void enqueue(task_queue * q, PD * task);
-PD * deque(task_queue * q);
-PD * peek(task_queue * q);
-void enqueue_in_offset_order(task_queue * q, PD * task);
+void init_queue(task_queue *q);
+void enqueue(task_queue *q, PD *task);
+PD *deque(task_queue *q);
+PD *peek(task_queue *q);
+void enqueue_in_offset_order(task_queue *q, PD *task);
 void Setup_Function_Stack(PD *p, PID pid, voidfuncptr f);
 
 /*   
 * inline assembly code to disable/enable maskable interrupts   
 * (N.B. Use with caution.)  
-*/  
+*/
 
-#define OS_EI()    asm(" sei ")  /* disable all interrupts */
-#define OS_DI()    asm(" cli ")  /* enable all interrupts */
+#define OS_EI() asm(" sei ") /* disable all interrupts */
+#define OS_DI() asm(" cli ") /* enable all interrupts */
