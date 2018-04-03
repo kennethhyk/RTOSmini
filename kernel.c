@@ -10,6 +10,8 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
+#include "joystick/joystick.c"
+#include "servo/servo.c"
 
 //tests - ipc
 // #include "tests/ipc/ipc_receiver_mask.c"
@@ -31,7 +33,7 @@
 // #include "tests/os/system_rr.c"
 
 #define DEBUG 1
- 
+
 /**
   * This table contains ALL process descriptors. It doesn't matter what
   * state a task is in.
@@ -96,7 +98,7 @@ static PD *Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
       // empty msg descriptors
       memset(&Process[x].msg, 0, sizeof(msg_desc));
       memset(&Process[x].async_msg, 0, sizeof(async_msg_desc));
-      
+
       p = &(Process[x]);
       break;
     }
@@ -122,9 +124,9 @@ void Setup_Function_Stack(PD *p, PID pid, voidfuncptr f)
   //Clear workspace
   memset(&(p->workSpace), 0, WORKSPACE);
 
-  //Notice that we are placing the address (17-bit) of the functions
+  //We are placing the address (17-bit) of the functions
   //onto the stack in reverse byte order (least significant first, followed
-  //by most significant).  This is because the "return" assembly instructions
+  //by most significant). This is because the "return" assembly instructions
   //(rtn and rti) pop addresses off in BIG ENDIAN (most sig. first, least sig.
   //second), even though the AT90 is LITTLE ENDIAN machine.
 
@@ -194,7 +196,7 @@ PID Task_Create_Period(voidfuncptr f, int arg, TICK period, TICK wcet, TICK offs
   // printf("Start time: %d\n", p->start_time);
   p->remaining_ticks = wcet;
 
-   enqueue_in_start_order(&PERIODIC_TASKS, p);
+  enqueue_in_start_order(&PERIODIC_TASKS, p);
 
   return p->pid;
 }
@@ -209,7 +211,8 @@ PID Task_Pid(void)
   return Cp->pid;
 }
 
-bool is_ipc_blocked(PD * p){
+bool is_ipc_blocked(PD *p)
+{
   // printf("ipc_status, pid: %d , %d\n", p->ipc_status, p->pid);
   return (p->ipc_status == C_RECV_BLOCK) || (p->ipc_status == S_RECV_BLOCK) || (p->ipc_status == SEND_BLOCK);
 }
@@ -242,8 +245,8 @@ static void Dispatch()
   // else
   {
     // go through the q and find
-    while ( is_ipc_blocked(peek(&RR_TASKS)) )
-    { 
+    while (is_ipc_blocked(peek(&RR_TASKS)))
+    {
       // idle task exists in rrq so this loop WILL terminate
       enqueue(&RR_TASKS, deque(&RR_TASKS));
     }
@@ -314,7 +317,7 @@ static void Next_Kernel_Request()
           Cp->sender_pid = INIT_SENDER_PID;
           Cp->ipc_status = NONE_STATE;
           Cp->listen_to = ALL;
-         // consider calling task terminate
+          // consider calling task terminate
         }
         break;
       case RR:
@@ -411,7 +414,7 @@ static void Next_Kernel_Request()
 /*========================
   |  RTOS API and Stubs  |
   *=======================
-  */
+*/
 
 /**
   * This function initializes the RTOS and must be called before any other
@@ -479,7 +482,7 @@ void Task_Terminate()
   Cp->listen_to = ALL;
 
   TotalTasks--;
- 
+
   // clear msg descriptors
   memset(&Cp->msg, 0, sizeof(msg_desc));
   memset(&Cp->async_msg, 0, sizeof(async_msg_desc));
@@ -493,15 +496,15 @@ void Task_Terminate()
   */
 void OS_Kill_Task(PID pid)
 {
-  PD * p = &Process[pid];
+  PD *p = &Process[pid];
   p->request = TERMINATE;
   p->state = DEAD;
   p->sender_pid = INIT_SENDER_PID;
   p->ipc_status = NONE_STATE;
   p->listen_to = ALL;
-  
+
   TotalTasks--;
-  
+
   // clear msg descriptors
   memset(&p->msg, 0, sizeof(msg_desc));
   memset(&p->async_msg, 0, sizeof(async_msg_desc));
@@ -571,7 +574,8 @@ void Msg_Send(PID id, MTYPE t, unsigned int *v)
     //send block
     Cp->ipc_status = SEND_BLOCK;
     // for multiple senders
-    if(Process[id].sender_pid == INIT_SENDER_PID){
+    if (Process[id].sender_pid == INIT_SENDER_PID)
+    {
       Process[id].sender_pid = Cp->pid;
     }
     Task_Next();
@@ -594,7 +598,7 @@ void Msg_Send(PID id, MTYPE t, unsigned int *v)
     Cp->ipc_status = C_RECV_BLOCK;
     Task_Next();
   }
-  // receive reply  
+  // receive reply
   *v = Process[Cp->sender_pid].msg.msg;
   Process[Cp->sender_pid].ipc_status = NONE_STATE;
 }
@@ -611,12 +615,14 @@ PID Msg_Recv(MASK m, unsigned int *v)
     // don't know which sender to unblock
     // so check if sender set my sender_pid
     // if so, unblock sender
-    if (Cp->sender_pid != INIT_SENDER_PID){
+    if (Cp->sender_pid != INIT_SENDER_PID)
+    {
       Process[Cp->sender_pid].ipc_status = NONE_STATE;
     }
     Task_Next();
   }
-  if (Cp->msg.exists){
+  if (Cp->msg.exists)
+  {
     // pick up message
     PID sender_id = Cp->sender_pid;
     // get msg
@@ -624,8 +630,10 @@ PID Msg_Recv(MASK m, unsigned int *v)
     // received message, reset exists
     Cp->msg.exists = false;
     return sender_id;
-  } else if (Cp->async_msg.exists) {  
-     // pick up message
+  }
+  else if (Cp->async_msg.exists)
+  {
+    // pick up message
     PID sender_id = Cp->async_msg.sender_pid;
     // get msg
     *v = Cp->async_msg.msg;
@@ -665,7 +673,7 @@ void Msg_ASend(PID id, MTYPE t, unsigned int v)
   }
   //can i send
   if ((Process[id].ipc_status != S_RECV_BLOCK) ||
-         ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0)))
+      ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0)))
   {
     // receiver not waiting,
     // return async send
@@ -716,22 +724,61 @@ void main()
   uart_init();
   stdout = &uart_output;
   stdin = &uart_input;
+  
+  init_joystick();
+  init_servo();
+  uint16_t xpin = 0;
+  uint16_t ypin = 1;
+  int x2 = 0;
+  int y2 = 0;
 
-  init_LED_idle();
-  init_LED_B5();
-  init_LED_B6();
-  init_LED_B3();
+  // while(1){
+  //   x = analog_read(xpin);
+  //   y = analog_read(ypin);
+  //   printf("X: %d\n", x);
+  //   printf("Y: %d\n", y);
+  //   _delay_ms(100);
+  // }
 
-  printf("=====_OS_START_====\n");
-  // clear memory and prepare queues
-  OS_Init();
+	// while (1)
+	// {
 
-  Task_Create_RR(idle_func, 0);
-  // Task_Create_System(a_main, 0);
-  Task_Create_Period(Pong, 0, 10, 1, 6);
-  Task_Create_Period(Ding, 0,10, 1, 6);
+	// 	x2 = analog_read(xpin);
+	// 	y2 = analog_read(ypin);
+  //   printf("X: %d\n", x2);
+  //   printf("Y: %d\n", y2);
 
-  OS_Start();
-  printf("=====_OS_END_====\n");
+  //   if (x2 <= 509)
+  //   {
+  //     servo2('L');
+  //   }
+  //   else if (x2 > 509)
+  //   {
+  //     servo2('R');
+  //   }
+    
+  //   if (y2 < 510)
+  //   {
+  //     // servo1('L');
+  //   }
+  //   else if (y2 > 511)
+  //   {
+  //     // servo1('R');
+  //   }
 
+  //   // _delay_ms(100); 
+	// 	// Task_Next();
+	// }
+
+  // printf("=====_OS_START_====\n");
+  // // clear memory and prepare queues
+  // OS_Init();
+
+  // Task_Create_RR(idle_func, 0);
+  // // Task_Create_System(a_main, 0);
+  // Task_Create_Period(Pong, 0, 10, 1, 6);
+  // Task_Create_Period(Ding, 0, 10, 1, 6);
+
+  // OS_Start();
+  // printf("=====_OS_END_====\n");
 }
