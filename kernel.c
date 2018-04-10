@@ -732,43 +732,35 @@ void main()
   int x2 = 0;
   int y2 = 0;
 
-  // while(1){
-  //   x = analog_read(xpin);
-  //   y = analog_read(ypin);
-  //   printf("X: %d\n", x);
-  //   printf("Y: %d\n", y);
-  //   _delay_ms(100);
-  // }
+	while (1)
+	{
+    readJoyStick();
+		// x2 = analog_read(xpin);
+		// y2 = analog_read(ypin);
+    // printf("X: %d\n", x2);
+    // printf("Y: %d\n", y2);
 
-	// while (1)
-	// {
-
-	// 	x2 = analog_read(xpin);
-	// 	y2 = analog_read(ypin);
-  //   printf("X: %d\n", x2);
-  //   printf("Y: %d\n", y2);
-
-  //   if (x2 <= 509)
-  //   {
-  //     servo2('L');
-  //   }
-  //   else if (x2 > 509)
-  //   {
-  //     servo2('R');
-  //   }
+    // if (x2 <= 509)
+    // {
+    //   servo2('L');
+    // }
+    // else if (x2 > 509)
+    // {
+    //   servo2('R');
+    // }
     
-  //   if (y2 < 510)
-  //   {
-  //     // servo1('L');
-  //   }
-  //   else if (y2 > 511)
-  //   {
-  //     // servo1('R');
-  //   }
+    // if (y2 < 510)
+    // {
+    //   servo1('D');
+    // }
+    // else if (y2 > 511)
+    // {
+    //   servo1('U');
+    // }
 
-  //   // _delay_ms(100); 
-	// 	// Task_Next();
-	// }
+    _delay_ms(40); 
+		// Task_Next();
+	}
 
   // printf("=====_OS_START_====\n");
   // // clear memory and prepare queues
