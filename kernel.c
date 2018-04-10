@@ -11,7 +11,6 @@
 #include "kernel.h"
 #include "queue.c"
 #include "joystick/joystick.c"
-#include "servo/servo.c"
 
 //tests - ipc
 // #include "tests/ipc/ipc_receiver_mask.c"
