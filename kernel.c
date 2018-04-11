@@ -10,6 +10,7 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
+#include "joystick/joystick.c"
 
 //tests - ipc
 // #include "tests/ipc/ipc_receiver_mask.c"
@@ -31,7 +32,7 @@
 // #include "tests/os/system_rr.c"
 
 #define DEBUG 1
- 
+
 /**
   * This table contains ALL process descriptors. It doesn't matter what
   * state a task is in.
@@ -55,13 +56,13 @@ static volatile PD *Cp;
 volatile unsigned char *KernelSp;
 
 /** 1 if kernel has been started; 0 otherwise. */
-static volatile unsigned int KernelActive;
+static volatile unsigned int KernelActive = 0;
 
 /** number of tasks created so far */
 static volatile unsigned int TotalTasks;
 
 // Tick count in order to schedule periodic tasks
-volatile unsigned int num_ticks = 0;
+volatile unsigned long num_ticks = 0;
 
 /**
   * This is a "shadow" copy of the stack pointer of "Cp", the currently
@@ -69,6 +70,10 @@ volatile unsigned int num_ticks = 0;
   * it into the appropriate process descriptor.
 */
 unsigned char *CurrentSp;
+
+unsigned long Now(){
+  return num_ticks;
+}
 
 /**
   *  Create a new task
@@ -96,7 +101,7 @@ static PD *Kernel_Create_Task(voidfuncptr f, int arg, PRIORITY_LEVEL level)
       // empty msg descriptors
       memset(&Process[x].msg, 0, sizeof(msg_desc));
       memset(&Process[x].async_msg, 0, sizeof(async_msg_desc));
-      
+
       p = &(Process[x]);
       break;
     }
@@ -122,9 +127,9 @@ void Setup_Function_Stack(PD *p, PID pid, voidfuncptr f)
   //Clear workspace
   memset(&(p->workSpace), 0, WORKSPACE);
 
-  //Notice that we are placing the address (17-bit) of the functions
+  //We are placing the address (17-bit) of the functions
   //onto the stack in reverse byte order (least significant first, followed
-  //by most significant).  This is because the "return" assembly instructions
+  //by most significant). This is because the "return" assembly instructions
   //(rtn and rti) pop addresses off in BIG ENDIAN (most sig. first, least sig.
   //second), even though the AT90 is LITTLE ENDIAN machine.
 
@@ -194,7 +199,7 @@ PID Task_Create_Period(voidfuncptr f, int arg, TICK period, TICK wcet, TICK offs
   // printf("Start time: %d\n", p->start_time);
   p->remaining_ticks = wcet;
 
-   enqueue_in_start_order(&PERIODIC_TASKS, p);
+  enqueue_in_start_order(&PERIODIC_TASKS, p);
 
   return p->pid;
 }
@@ -209,7 +214,8 @@ PID Task_Pid(void)
   return Cp->pid;
 }
 
-bool is_ipc_blocked(PD * p){
+bool is_ipc_blocked(PD *p)
+{
   // printf("ipc_status, pid: %d , %d\n", p->ipc_status, p->pid);
   return (p->ipc_status == C_RECV_BLOCK) || (p->ipc_status == S_RECV_BLOCK) || (p->ipc_status == SEND_BLOCK);
 }
@@ -236,14 +242,15 @@ static void Dispatch()
   // periodic tasks are sorted by start time, so only looking at head suffices
   else if (PERIODIC_TASKS.head && num_ticks >= peek(&PERIODIC_TASKS)->start_time)
   {
+    // printf("he");
     Cp = peek(&PERIODIC_TASKS);
   }
   else if (RR_TASKS.size > 0)
   // else
   {
     // go through the q and find
-    while ( is_ipc_blocked(peek(&RR_TASKS)) )
-    { 
+    while (is_ipc_blocked(peek(&RR_TASKS)))
+    {
       // idle task exists in rrq so this loop WILL terminate
       enqueue(&RR_TASKS, deque(&RR_TASKS));
     }
@@ -314,7 +321,7 @@ static void Next_Kernel_Request()
           Cp->sender_pid = INIT_SENDER_PID;
           Cp->ipc_status = NONE_STATE;
           Cp->listen_to = ALL;
-         // consider calling task terminate
+          // consider calling task terminate
         }
         break;
       case RR:
@@ -333,6 +340,13 @@ static void Next_Kernel_Request()
         Cp->state = READY;
       }
 
+      // add to cumulative laser count if laser on
+      if (laser_on)
+      {
+        cumulative_laser_time++;
+        printf("Cumulative laser time: %d\n", cumulative_laser_time);
+      }
+  
       Dispatch();
       break;
 
@@ -411,7 +425,7 @@ static void Next_Kernel_Request()
 /*========================
   |  RTOS API and Stubs  |
   *=======================
-  */
+*/
 
 /**
   * This function initializes the RTOS and must be called before any other
@@ -447,7 +461,6 @@ void OS_Start()
   {
     init_timer();
     // Select a free task and dispatch it
-
     KernelActive = 1;
     Next_Kernel_Request();
     /* NEVER RETURNS!!! */
@@ -479,7 +492,7 @@ void Task_Terminate()
   Cp->listen_to = ALL;
 
   TotalTasks--;
- 
+
   // clear msg descriptors
   memset(&Cp->msg, 0, sizeof(msg_desc));
   memset(&Cp->async_msg, 0, sizeof(async_msg_desc));
@@ -493,15 +506,15 @@ void Task_Terminate()
   */
 void OS_Kill_Task(PID pid)
 {
-  PD * p = &Process[pid];
+  PD *p = &Process[pid];
   p->request = TERMINATE;
   p->state = DEAD;
   p->sender_pid = INIT_SENDER_PID;
   p->ipc_status = NONE_STATE;
   p->listen_to = ALL;
-  
+
   TotalTasks--;
-  
+
   // clear msg descriptors
   memset(&p->msg, 0, sizeof(msg_desc));
   memset(&p->async_msg, 0, sizeof(async_msg_desc));
@@ -517,41 +530,30 @@ void idle_func()
   }
 }
 
-// 10ms
-// void init_timer()
-// {
-//   TCCR1A = 0;
-//   TCCR1B = 0;
-//   OCR1A = 15999;
-//   TCCR1B |= (1 << WGM12);
-//   TCCR1B |= (1 << CS00);
-//   TIMSK1 |= (1 << OCIE1A);
-// }
-
 // 1s
 void init_timer()
 {
   //Clear timer config.
-  TCCR1A = 0; // set entire TCCR1A register to 0
-  TCCR1B = 0; // same for TCCR1B
+  TCCR4A = 0; // set entire TCCR1A register to 0
+  TCCR4B = 0; // same for TCCR1B
 
-  TCNT1 = 0; //initialize counter value to 0
+  TCNT4 = 0; //initialize counter value to 0
   // set compare match register for 1hz increments
-  TCCR1B |= (1 << WGM12);
+  TCCR4B |= (1 << WGM12);
   // OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
-  OCR1A = 7000;
+  OCR4A = 1000;
   // Set CS10 and CS12 bits for 1024 prescaler
-  TCCR1B |= (1 << CS12) | (1 << CS10);
+  TCCR4B |= (1 << CS12) | (1 << CS10);
 
   // enable timer compare interrupt
-  TIMSK1 |= (1 << OCIE1A);
+  TIMSK4 |= (1 << OCIE4A);
 }
 
-ISR(TIMER1_COMPA_vect)
+ISR(TIMER4_COMPA_vect)
 {
   // toggle_LED_B3();
   num_ticks++;
-  printf("%d\n", num_ticks);
+  // printf("%d\n", num_ticks);
   OS_DI();
   Cp->request = TIMER;
   Enter_Kernel();
@@ -571,7 +573,8 @@ void Msg_Send(PID id, MTYPE t, unsigned int *v)
     //send block
     Cp->ipc_status = SEND_BLOCK;
     // for multiple senders
-    if(Process[id].sender_pid == INIT_SENDER_PID){
+    if (Process[id].sender_pid == INIT_SENDER_PID)
+    {
       Process[id].sender_pid = Cp->pid;
     }
     Task_Next();
@@ -594,7 +597,7 @@ void Msg_Send(PID id, MTYPE t, unsigned int *v)
     Cp->ipc_status = C_RECV_BLOCK;
     Task_Next();
   }
-  // receive reply  
+  // receive reply
   *v = Process[Cp->sender_pid].msg.msg;
   Process[Cp->sender_pid].ipc_status = NONE_STATE;
 }
@@ -611,12 +614,14 @@ PID Msg_Recv(MASK m, unsigned int *v)
     // don't know which sender to unblock
     // so check if sender set my sender_pid
     // if so, unblock sender
-    if (Cp->sender_pid != INIT_SENDER_PID){
+    if (Cp->sender_pid != INIT_SENDER_PID)
+    {
       Process[Cp->sender_pid].ipc_status = NONE_STATE;
     }
     Task_Next();
   }
-  if (Cp->msg.exists){
+  if (Cp->msg.exists)
+  {
     // pick up message
     PID sender_id = Cp->sender_pid;
     // get msg
@@ -624,8 +629,10 @@ PID Msg_Recv(MASK m, unsigned int *v)
     // received message, reset exists
     Cp->msg.exists = false;
     return sender_id;
-  } else if (Cp->async_msg.exists) {  
-     // pick up message
+  }
+  else if (Cp->async_msg.exists)
+  {
+    // pick up message
     PID sender_id = Cp->async_msg.sender_pid;
     // get msg
     *v = Cp->async_msg.msg;
@@ -665,7 +672,7 @@ void Msg_ASend(PID id, MTYPE t, unsigned int v)
   }
   //can i send
   if ((Process[id].ipc_status != S_RECV_BLOCK) ||
-         ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0)))
+      ((Process[id].ipc_status == S_RECV_BLOCK) && ((Process[id].listen_to & t) == 0)))
   {
     // receiver not waiting,
     // return async send
@@ -700,11 +707,13 @@ void OS_Abort(unsigned int error)
 void Pong()
 {
   printf("Executed pong\n");
+  Task_Next();
 }
 
 void Ding()
 {
   printf("Executed Ding\n");
+  Task_Next();
 }
 
 /**
@@ -717,21 +726,17 @@ void main()
   stdout = &uart_output;
   stdin = &uart_input;
 
-  init_LED_idle();
-  init_LED_B5();
-  init_LED_B6();
-  init_LED_B3();
+  init_joystick();
 
-  printf("=====_OS_START_====\n");
-  // clear memory and prepare queues
+  init_servo();
+
   OS_Init();
-
-  Task_Create_RR(idle_func, 0);
-  // Task_Create_System(a_main, 0);
-  Task_Create_Period(Pong, 0, 10, 1, 6);
-  Task_Create_Period(Ding, 0,10, 1, 6);
+  
+  printf("=====_OS_START_====\n");
+  // // clear memory and prepare queues
+  Task_Create_RR(drive_servo, 1);
 
   OS_Start();
-  printf("=====_OS_END_====\n");
 
+  printf("=====_OS_END_====\n");
 }
