@@ -1,8 +1,11 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdbool.h>
 #include "os.h"
-#include "avr_console.h"
+
+#include "uart/uart.c"
+#include "bluetooth/bluetooth.c"
 #include <string.h>
 #include <avr/io.h>
 #include <util/delay.h>
@@ -11,6 +14,7 @@
 #include "kernel.h"
 #include "queue.c"
 #include "joystick/joystick.c"
+#include "roomba/roomba.c"
 
 //tests - ipc
 // #include "tests/ipc/ipc_receiver_mask.c"
@@ -720,23 +724,70 @@ void Ding()
   * This function creates two cooperative tasks, "Ping" and "Pong". Both
   * will run forever.
   */
+
 void main()
 {
+
   uart_init();
+  uart_init_0();
+  uart_init_2();
   stdout = &uart_output;
   stdin = &uart_input;
 
+  uart_putchar_2((uint8_t)128);
+  _delay_ms(20);
+  uart_putchar_2((uint8_t)131);
+  _delay_ms(800);
+
   init_joystick();
-
   init_servo();
-
-  OS_Init();
   
+//============================================================
+  // uart_putchar_0(128);
+  // _delay_ms(20);
+  // uart_putchar_0(131);
+  // _delay_ms(1000);
+
+  // int x = 0x0;
+  // int y = 0x0;
+  // while(1){
+  //   receivePacket(&x, &y);
+  //   // printf("%d, %d\n", x, y);
+  //   translateToMotion(x, y);
+  //   x = 0;
+  //   y = 0;
+  // }
+//============================================================
+  // while(1) {
+  //   readJoyStick();
+  //   if(joystick_centered != 1){
+  //     // printf("sending: %d, %d\n", joystick_X,joystick_Y);
+  //     sendPacket(joystick_X, joystick_Y);
+  //   } 
+  //   else if(joystick_centered == 1) {
+  //     sendPacket(0, 0);
+  //   }
+  // }
+//================AUTONOMOUS ROOMBA============================================
+  cruiseMode();
+//==================ROOMBA SENSOR READ=======================================
+  // uart_putchar_0((uint8_t)142);
+  // uart_putchar_0((uint8_t)7);
+  // printf("unsigned int: %x\n", (uint8_t)142);
+  // printf("signed char: %x\n", (char)142);
+  // printf("int: %x\n", 142);
+  // while(1) {
+  //   uint8_t c = uart_getchar();
+  //   printf("received: %x\n", c);
+  // }
+//============================================================
+
+  OS_Init();  
   printf("=====_OS_START_====\n");
   // // clear memory and prepare queues
+
   Task_Create_RR(drive_servo, 1);
 
   OS_Start();
-
   printf("=====_OS_END_====\n");
 }
