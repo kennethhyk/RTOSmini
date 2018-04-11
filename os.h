@@ -110,7 +110,7 @@ void Msg_ASend(PID id, MTYPE t, unsigned int v);
   * Now() will wrap around every 65536 milliseconds. Therefore, for measurement
   * purposes, it should be used for durations less than 65 seconds.
   */
-unsigned int Now(); // number of milliseconds since the RTOS boots.
+unsigned long Now(); // number of milliseconds since the RTOS boots.
 
 /*==================================================================  
  *        S T A N D A R D   I N L I N E    P R O C E D U R E S  

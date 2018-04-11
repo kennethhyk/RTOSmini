@@ -14,7 +14,6 @@
 #include "kernel.h"
 #include "queue.c"
 #include "joystick/joystick.c"
-#include "servo/servo.c"
 #include "roomba/roomba.c"
 
 //tests - ipc
@@ -61,13 +60,13 @@ static volatile PD *Cp;
 volatile unsigned char *KernelSp;
 
 /** 1 if kernel has been started; 0 otherwise. */
-static volatile unsigned int KernelActive;
+static volatile unsigned int KernelActive = 0;
 
 /** number of tasks created so far */
 static volatile unsigned int TotalTasks;
 
 // Tick count in order to schedule periodic tasks
-volatile unsigned int num_ticks = 0;
+volatile unsigned long num_ticks = 0;
 
 /**
   * This is a "shadow" copy of the stack pointer of "Cp", the currently
@@ -75,6 +74,10 @@ volatile unsigned int num_ticks = 0;
   * it into the appropriate process descriptor.
 */
 unsigned char *CurrentSp;
+
+unsigned long Now(){
+  return num_ticks;
+}
 
 /**
   *  Create a new task
@@ -243,6 +246,7 @@ static void Dispatch()
   // periodic tasks are sorted by start time, so only looking at head suffices
   else if (PERIODIC_TASKS.head && num_ticks >= peek(&PERIODIC_TASKS)->start_time)
   {
+    // printf("he");
     Cp = peek(&PERIODIC_TASKS);
   }
   else if (RR_TASKS.size > 0)
@@ -340,6 +344,13 @@ static void Next_Kernel_Request()
         Cp->state = READY;
       }
 
+      // add to cumulative laser count if laser on
+      if (laser_on)
+      {
+        cumulative_laser_time++;
+        printf("Cumulative laser time: %d\n", cumulative_laser_time);
+      }
+  
       Dispatch();
       break;
 
@@ -454,7 +465,6 @@ void OS_Start()
   {
     init_timer();
     // Select a free task and dispatch it
-
     KernelActive = 1;
     Next_Kernel_Request();
     /* NEVER RETURNS!!! */
@@ -524,41 +534,30 @@ void idle_func()
   }
 }
 
-// 10ms
-// void init_timer()
-// {
-//   TCCR1A = 0;
-//   TCCR1B = 0;
-//   OCR1A = 15999;
-//   TCCR1B |= (1 << WGM12);
-//   TCCR1B |= (1 << CS00);
-//   TIMSK1 |= (1 << OCIE1A);
-// }
-
 // 1s
 void init_timer()
 {
   //Clear timer config.
-  TCCR1A = 0; // set entire TCCR1A register to 0
-  TCCR1B = 0; // same for TCCR1B
+  TCCR4A = 0; // set entire TCCR1A register to 0
+  TCCR4B = 0; // same for TCCR1B
 
-  TCNT1 = 0; //initialize counter value to 0
+  TCNT4 = 0; //initialize counter value to 0
   // set compare match register for 1hz increments
-  TCCR1B |= (1 << WGM12);
+  TCCR4B |= (1 << WGM12);
   // OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
-  OCR1A = 7000;
+  OCR4A = 1000;
   // Set CS10 and CS12 bits for 1024 prescaler
-  TCCR1B |= (1 << CS12) | (1 << CS10);
+  TCCR4B |= (1 << CS12) | (1 << CS10);
 
   // enable timer compare interrupt
-  TIMSK1 |= (1 << OCIE1A);
+  TIMSK4 |= (1 << OCIE4A);
 }
 
-ISR(TIMER1_COMPA_vect)
+ISR(TIMER4_COMPA_vect)
 {
   // toggle_LED_B3();
   num_ticks++;
-  printf("%d\n", num_ticks);
+  // printf("%d\n", num_ticks);
   OS_DI();
   Cp->request = TIMER;
   Enter_Kernel();
@@ -712,11 +711,13 @@ void OS_Abort(unsigned int error)
 void Pong()
 {
   printf("Executed pong\n");
+  Task_Next();
 }
 
 void Ding()
 {
   printf("Executed Ding\n");
+  Task_Next();
 }
 
 /**
@@ -724,39 +725,8 @@ void Ding()
   * will run forever.
   */
 
-int joystick_RAW_X = 0;
-int joystick_RAW_Y = 0;
-int joystick_X = 509;
-int joystick_Y = 509;
-int joystick_Btn = 0;
-int joystick_centered = 1;
-int deadband = 15;
-const int numReadings = 10;
-int readings_X[10];
-int readIndex_X = 0;
-int total_X = 0;
-int average_X = 0;
-int readings_Y[10];
-int readIndex_Y = 0;
-int total_Y = 0;
-int average_Y = 0;
-
 void main()
 {
-
-  // change baud rate to 19200
-  // DDRD = 0xFF;
-  // PORTD = 0xFF;
-  // PORTD = 0x00;
-  // _delay_ms(500);
-  // PORTD = 0xFF;
-  // _delay_ms(2000);
-  // for(int p = 0;p < 3;p++){
-  //   DDRD = 0x00;
-  //   _delay_ms(50);
-  //   DDRD = 0xFF;
-  //   _delay_ms(50);
-  // }
 
   uart_init();
   uart_init_0();
@@ -771,6 +741,7 @@ void main()
 
   init_joystick();
   init_servo();
+  
 //============================================================
   // uart_putchar_0(128);
   // _delay_ms(20);
@@ -810,58 +781,13 @@ void main()
   //   printf("received: %x\n", c);
   // }
 //============================================================
-  uint16_t xpin = 0;
-  uint16_t ypin = 1;
-  int x2 = 0;
-  int y2 = 0;
 
-  // while(1){
-  //   x = analog_read(xpin);
-  //   y = analog_read(ypin);
-  //   printf("X: %d\n", x);
-  //   printf("Y: %d\n", y);
-  //   _delay_ms(100);
-  // }
-
-	// while (1)
-	// {
-
-	// 	x2 = analog_read(xpin);
-	// 	y2 = analog_read(ypin);
-  //   printf("X: %d\n", x2);
-  //   printf("Y: %d\n", y2);
-
-  //   if (x2 <= 509)
-  //   {
-  //     servo2('L');
-  //   }
-  //   else if (x2 > 509)
-  //   {
-  //     servo2('R');
-  //   }
-    
-  //   if (y2 < 510)
-  //   {
-  //     // servo1('L');
-  //   }
-  //   else if (y2 > 511)
-  //   {
-  //     // servo1('R');
-  //   }
-
-  //   // _delay_ms(100); 
-	// 	// Task_Next();
-	// }
-
-  // printf("=====_OS_START_====\n");
+  OS_Init();  
+  printf("=====_OS_START_====\n");
   // // clear memory and prepare queues
-  // OS_Init();
 
-  // Task_Create_RR(idle_func, 0);
-  // // Task_Create_System(a_main, 0);
-  // Task_Create_Period(Pong, 0, 10, 1, 6);
-  // Task_Create_Period(Ding, 0, 10, 1, 6);
+  Task_Create_RR(drive_servo, 1);
 
-  // OS_Start();
-  // printf("=====_OS_END_====\n");
+  OS_Start();
+  printf("=====_OS_END_====\n");
 }

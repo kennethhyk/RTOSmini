@@ -8,8 +8,10 @@
 
 // MG995 middle:1350 us, +/- 870 ms
 
-int i = 400;
-int j = 340;
+uint16_t MIN_X = 200;
+uint16_t MAX_X = 600;
+uint16_t MIN_Y = 490;
+uint16_t MAX_Y = 650;
 
 void init_servo(){
 	DDRE |= (1<<PE5);  //PWM Pins as Out
@@ -24,55 +26,33 @@ void init_servo(){
 
 	TCCR3B |= (1<<CS31)|(1<<CS30);
 
-	OCR3A=7000;  //20 ms period
-	OCR3B = 375;
-	OCR3C = 375;
+	OCR3A = 5000;  //20 ms period
+	OCR3B = 500;  // base positions pan
+	OCR3C = 500;  // base position tilt
 }
 
+
 void servo_set_pin_tilt_3(uint16_t pos) {
-	if(pos <= 300) {
-		pos = 325;
-	} else if (pos >= 450) {
-		pos = 450;
+	if(pos < MIN_Y) {
+		pos = MIN_Y;
 	}
-    OCR3B = pos;
+	if(pos > MAX_Y) {
+		pos = MAX_Y;
+	}
+
+	printf("Writing %d to servo 3\n", pos);
+	OCR3B = pos;
 }
 
 void servo_set_pin_pan_2(uint16_t pos) {
-	if(pos <= 135) {
-		pos = 135;
-	} else if(pos >= 550) {
-		pos = 550;
+	if(pos < MIN_X) {
+		pos = MIN_X;
 	}
+
+	if(pos > MAX_X) {
+		pos = MAX_X;
+	}
+
+	printf("Writing %d to servo 2\n", pos);
 	OCR3C = pos;
-}
-
-void servo1(char c){
-	if(c=='D'){
-		if((i+15)<550){
-			i+=15;
-			servo_set_pin_pan_2(i);
-		}
-	}else if(c=='U'){
-		if((i-15)>250){
-			i-=15;
-			servo_set_pin_pan_2(i);
-		}
-	}
-	return;
-}
-
-void servo2(char c){
-	if(c=='L'){
-		if((j+15)<550){
-			j+=15;
-			servo_set_pin_tilt_3(j);
-		}
-	}else if(c=='R'){
-		if((j-15)>300){
-			j-=15;
-			servo_set_pin_tilt_3(j);
-		}
-	}
-	return;
 }
