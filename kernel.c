@@ -56,13 +56,13 @@ static volatile PD *Cp;
 volatile unsigned char *KernelSp;
 
 /** 1 if kernel has been started; 0 otherwise. */
-static volatile unsigned int KernelActive;
+static volatile unsigned int KernelActive = 0;
 
 /** number of tasks created so far */
 static volatile unsigned int TotalTasks;
 
 // Tick count in order to schedule periodic tasks
-volatile unsigned int num_ticks = 0;
+volatile unsigned long num_ticks = 0;
 
 /**
   * This is a "shadow" copy of the stack pointer of "Cp", the currently
@@ -70,6 +70,10 @@ volatile unsigned int num_ticks = 0;
   * it into the appropriate process descriptor.
 */
 unsigned char *CurrentSp;
+
+unsigned long Now(){
+  return num_ticks;
+}
 
 /**
   *  Create a new task
@@ -326,6 +330,7 @@ static void Next_Kernel_Request()
           // reset ticks and move to back of q
           Cp->remaining_ticks = 1;
           enqueue(&RR_TASKS, deque(&RR_TASKS));
+          printf("heeeynow\n");
         }
         break;
       }
@@ -335,6 +340,13 @@ static void Next_Kernel_Request()
         Cp->state = READY;
       }
 
+      // add to cumulative laser count if laser on
+      // if (laser_on)
+      // {
+      //   cumulative_laser_time++;
+      //   printf("Cumulative laser time: %d\n", cumulative_laser_time);
+      // }
+  
       Dispatch();
       break;
 
@@ -445,15 +457,13 @@ void OS_Init()
 void OS_Start()
 {
   OS_DI();
-  if ((KernelActive == 0) && (TotalTasks > 0))
-  {
+  if (KernelActive == 0){
     init_timer();
     // Select a free task and dispatch it
-
-    KernelActive = 1;
     Next_Kernel_Request();
-    /* NEVER RETURNS!!! */
   }
+
+  /* NEVER RETURNS!!! */
 }
 
 /**
@@ -513,41 +523,41 @@ void idle_func()
 {
   while (1)
   {
-    // printf("idle\n");
+    printf("idle\n");
     toggle_LED_idle();
     _delay_ms(1000);
   }
 }
 
 // 10ms
-// void init_timer()
-// {
-//   TCCR1A = 0;
-//   TCCR1B = 0;
-//   OCR1A = 15999;
-//   TCCR1B |= (1 << WGM12);
-//   TCCR1B |= (1 << CS00);
-//   TIMSK1 |= (1 << OCIE1A);
-// }
-
-// 1s
 void init_timer()
 {
-  //Clear timer config.
-  TCCR1A = 0; // set entire TCCR1A register to 0
-  TCCR1B = 0; // same for TCCR1B
-
-  TCNT1 = 0; //initialize counter value to 0
-  // set compare match register for 1hz increments
+  TCCR1A = 0;
+  TCCR1B = 0;
+  OCR1A = 15999;
   TCCR1B |= (1 << WGM12);
-  // OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
-  OCR1A = 7000;
-  // Set CS10 and CS12 bits for 1024 prescaler
-  TCCR1B |= (1 << CS12) | (1 << CS10);
-
-  // enable timer compare interrupt
+  TCCR1B |= (1 << CS00);
   TIMSK1 |= (1 << OCIE1A);
 }
+
+// 1s
+// void init_timer()
+// {
+//   //Clear timer config.
+//   TCCR1A = 0; // set entire TCCR1A register to 0
+//   TCCR1B = 0; // same for TCCR1B
+
+//   TCNT1 = 0; //initialize counter value to 0
+//   // set compare match register for 1hz increments
+//   TCCR1B |= (1 << WGM12);
+//   // OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
+//   OCR1A = 7000;
+//   // Set CS10 and CS12 bits for 1024 prescaler
+//   TCCR1B |= (1 << CS12) | (1 << CS10);
+
+//   // enable timer compare interrupt
+//   TIMSK1 |= (1 << OCIE1A);
+// }
 
 ISR(TIMER1_COMPA_vect)
 {
@@ -707,11 +717,13 @@ void OS_Abort(unsigned int error)
 void Pong()
 {
   printf("Executed pong\n");
+  Task_Next();
 }
 
 void Ding()
 {
   printf("Executed Ding\n");
+  Task_Next();
 }
 
 /**
@@ -726,50 +738,21 @@ void main()
   
   init_joystick();
   init_servo();
-  uint16_t xpin = 0;
-  uint16_t ypin = 1;
-  int x2 = 0;
-  int y2 = 0;
 
-	while (1)
-	{
-    readJoyStick();
-		// x2 = analog_read(xpin);
-		// y2 = analog_read(ypin);
-    // printf("X: %d\n", x2);
-    // printf("Y: %d\n", y2);
+  // joystick button
+	DDRC = 0x00;
+  // laser
+  DDRB = 0xFF;
 
-    // if (x2 <= 509)
-    // {
-    //   servo2('L');
-    // }
-    // else if (x2 > 509)
-    // {
-    //   servo2('R');
-    // }
-    
-    // if (y2 < 510)
-    // {
-    //   servo1('D');
-    // }
-    // else if (y2 > 511)
-    // {
-    //   servo1('U');
-    // }
-
-    _delay_ms(40); 
-		// Task_Next();
-	}
-
-  // printf("=====_OS_START_====\n");
-  // // clear memory and prepare queues
-  // OS_Init();
-
+  OS_Init();
+  
+  printf("=====_OS_START_====\n");
+  // clear memory and prepare queues
   // Task_Create_RR(idle_func, 0);
-  // // Task_Create_System(a_main, 0);
-  // Task_Create_Period(Pong, 0, 10, 1, 6);
-  // Task_Create_Period(Ding, 0, 10, 1, 6);
+  // Task_Create_System(a_main, 0);
+  Task_Create_Period(idle_func, 0, 2, 1, 0);
 
-  // OS_Start();
-  // printf("=====_OS_END_====\n");
+  OS_Start();
+
+  printf("=====_OS_END_====\n");
 }
