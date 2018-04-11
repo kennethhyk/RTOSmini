@@ -242,6 +242,7 @@ static void Dispatch()
   // periodic tasks are sorted by start time, so only looking at head suffices
   else if (PERIODIC_TASKS.head && num_ticks >= peek(&PERIODIC_TASKS)->start_time)
   {
+    // printf("he");
     Cp = peek(&PERIODIC_TASKS);
   }
   else if (RR_TASKS.size > 0)
@@ -330,7 +331,6 @@ static void Next_Kernel_Request()
           // reset ticks and move to back of q
           Cp->remaining_ticks = 1;
           enqueue(&RR_TASKS, deque(&RR_TASKS));
-          printf("heeeynow\n");
         }
         break;
       }
@@ -341,11 +341,11 @@ static void Next_Kernel_Request()
       }
 
       // add to cumulative laser count if laser on
-      // if (laser_on)
-      // {
-      //   cumulative_laser_time++;
-      //   printf("Cumulative laser time: %d\n", cumulative_laser_time);
-      // }
+      if (laser_on)
+      {
+        cumulative_laser_time++;
+        printf("Cumulative laser time: %d\n", cumulative_laser_time);
+      }
   
       Dispatch();
       break;
@@ -457,13 +457,14 @@ void OS_Init()
 void OS_Start()
 {
   OS_DI();
-  if (KernelActive == 0){
+  if ((KernelActive == 0) && (TotalTasks > 0))
+  {
     init_timer();
     // Select a free task and dispatch it
+    KernelActive = 1;
     Next_Kernel_Request();
+    /* NEVER RETURNS!!! */
   }
-
-  /* NEVER RETURNS!!! */
 }
 
 /**
@@ -523,43 +524,32 @@ void idle_func()
 {
   while (1)
   {
-    printf("idle\n");
+    // printf("idle\n");
     toggle_LED_idle();
     _delay_ms(1000);
   }
 }
 
-// 10ms
+// 1s
 void init_timer()
 {
-  TCCR1A = 0;
-  TCCR1B = 0;
-  OCR1A = 15999;
-  TCCR1B |= (1 << WGM12);
-  TCCR1B |= (1 << CS00);
-  TIMSK1 |= (1 << OCIE1A);
+  //Clear timer config.
+  TCCR4A = 0; // set entire TCCR1A register to 0
+  TCCR4B = 0; // same for TCCR1B
+
+  TCNT4 = 0; //initialize counter value to 0
+  // set compare match register for 1hz increments
+  TCCR4B |= (1 << WGM12);
+  // OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
+  OCR4A = 1000;
+  // Set CS10 and CS12 bits for 1024 prescaler
+  TCCR4B |= (1 << CS12) | (1 << CS10);
+
+  // enable timer compare interrupt
+  TIMSK4 |= (1 << OCIE4A);
 }
 
-// 1s
-// void init_timer()
-// {
-//   //Clear timer config.
-//   TCCR1A = 0; // set entire TCCR1A register to 0
-//   TCCR1B = 0; // same for TCCR1B
-
-//   TCNT1 = 0; //initialize counter value to 0
-//   // set compare match register for 1hz increments
-//   TCCR1B |= (1 << WGM12);
-//   // OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
-//   OCR1A = 7000;
-//   // Set CS10 and CS12 bits for 1024 prescaler
-//   TCCR1B |= (1 << CS12) | (1 << CS10);
-
-//   // enable timer compare interrupt
-//   TIMSK1 |= (1 << OCIE1A);
-// }
-
-ISR(TIMER1_COMPA_vect)
+ISR(TIMER4_COMPA_vect)
 {
   // toggle_LED_B3();
   num_ticks++;
@@ -735,22 +725,15 @@ void main()
   uart_init();
   stdout = &uart_output;
   stdin = &uart_input;
-  
+
   init_joystick();
   init_servo();
-
-  // joystick button
-	DDRC = 0x00;
-  // laser
-  DDRB = 0xFF;
 
   OS_Init();
   
   printf("=====_OS_START_====\n");
-  // clear memory and prepare queues
-  // Task_Create_RR(idle_func, 0);
-  // Task_Create_System(a_main, 0);
-  Task_Create_Period(idle_func, 0, 2, 1, 0);
+  // // clear memory and prepare queues
+  Task_Create_RR(read_joystick, 1);
 
   OS_Start();
 

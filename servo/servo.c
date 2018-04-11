@@ -10,7 +10,7 @@
 
 uint16_t MIN_X = 200;
 uint16_t MAX_X = 600;
-uint16_t MIN_Y = 490;
+uint16_t MIN_Y = 500;
 uint16_t MAX_Y = 650;
 
 void init_servo(){

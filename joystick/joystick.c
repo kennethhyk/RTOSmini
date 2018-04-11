@@ -31,6 +31,8 @@ void clear_laser(){
 
 uint16_t i = 375;
 uint16_t j = 490; // to account for pan motor height
+uint16_t pan_offset = 10;
+uint16_t tilt_offset = 5;
 
 void init_joystick()
 {
@@ -52,6 +54,12 @@ void init_joystick()
 
 	//Start ADC conversion
 	ADCSRA |= (1 << ADSC);
+
+	// joystick button as input
+	DDRC = 0x00;
+
+	// set laser as output
+	DDRB = 0xFF;
 }
 
 /**
@@ -90,79 +98,83 @@ uint16_t analog_read(uint16_t c)
 
 void read_joystick()
 {
-	joystick_RAW_X = analog_read(pin_joystick_X);
-	joystick_RAW_Y = analog_read(pin_joystick_Y);
-
-	// struct timeval t0;
-	// struct timeval t1;
-
-	int a = joystick_RAW_X - joystick_X_base;
-	int b = joystick_RAW_Y - joystick_Y_base;
-	// printf("X: %d\nY: %d\n", joystick_RAW_X, joystick_RAW_Y);
-
-	if ((square(a) + square(b)) > square(deadband))
+	while(1)
 	{
-		joystick_centered = 0;
-		total_X = total_X - readings_X[readIndex_X];
-		readings_X[readIndex_X] = joystick_RAW_X;
-		total_X = total_X + readings_X[readIndex_X];
-		readIndex_X = readIndex_X + 1;
-		if (readIndex_X >= numReadings)
-		{
-			readIndex_X = 0;
-		}
-		joystick_X = total_X / numReadings;
-		// joystick_X = joystick_RAW_X;
+		joystick_RAW_X = analog_read(pin_joystick_X);
+		joystick_RAW_Y = analog_read(pin_joystick_Y);
 
-		total_Y = total_Y - readings_Y[readIndex_Y];
-		readings_Y[readIndex_Y] = joystick_RAW_Y;
-		total_Y = total_Y + readings_Y[readIndex_Y];
-		readIndex_Y = readIndex_Y + 1;
-		if (readIndex_Y >= numReadings)
-		{
-			readIndex_Y = 0;
-		}
-		joystick_Y = total_Y / numReadings;
-		// joystick_Y = joystick_RAW_Y;
-		// printf("X: %d\nY: %d\n", joystick_X, joystick_Y);
-		translate_to_servo_command();
-	}
+		// struct timeval t0;
+		// struct timeval t1;
 
-	// joystick pressed
-	// due to PUPDR, PINC == 0 means laser is on
-	if (PINC == 0 || laser_on == 1)
-	{	
-		// calculate cumulative_laser_time
-		// 30 * 1000 / 10 ms interrupts
-		if (cumulative_laser_time > 3000){
-			// turn laser off
-			return;
+		int a = joystick_RAW_X - joystick_X_base;
+		int b = joystick_RAW_Y - joystick_Y_base;
+		// printf("X: %d\nY: %d\n", joystick_RAW_X, joystick_RAW_Y);
+
+		if ((square(a) + square(b)) > square(deadband))
+		{
+			joystick_centered = 0;
+			total_X = total_X - readings_X[readIndex_X];
+			readings_X[readIndex_X] = joystick_RAW_X;
+			total_X = total_X + readings_X[readIndex_X];
+			readIndex_X = readIndex_X + 1;
+			if (readIndex_X >= numReadings)
+			{
+				readIndex_X = 0;
+			}
+			joystick_X = total_X / numReadings;
+			// joystick_X = joystick_RAW_X;
+
+			total_Y = total_Y - readings_Y[readIndex_Y];
+			readings_Y[readIndex_Y] = joystick_RAW_Y;
+			total_Y = total_Y + readings_Y[readIndex_Y];
+			readIndex_Y = readIndex_Y + 1;
+			if (readIndex_Y >= numReadings)
+			{
+				readIndex_Y = 0;
+			}
+			joystick_Y = total_Y / numReadings;
+			// joystick_Y = joystick_RAW_Y;
+			// printf("X: %d\nY: %d\n", joystick_X, joystick_Y);
+			translate_to_servo_command();
 		}
 
-		// if laser off
-		if (laser_on == 0)
-		{
-			// turn on laser toggle
-			laser_on = 1;
-			// write to laser -- fill in code
-			set_laser();
-			// set last start time
-			last_start_time = Now();
-		} 
-		else 
-		{
-			// switch off laser when button is released
-			if (PINC != 0){
-				laser_on = 0;
-				clear_laser();
-				last_start_time = 0;
-				// calculate cumulative_laser_time
-				unsigned long laser_on_time = Now() - last_start_time;
-				printf("laser turned on for %lu ticks\n", laser_on_time);
+		// joystick pressed
+		// due to PUPDR, PINC == 0 means laser is on
+		if (PINC == 0 || laser_on == 1)
+		{	
+			// calculate cumulative_laser_time
+			// 30 * 1000 / 10 ms interrupts
+			if (cumulative_laser_time > 3000){
+				// turn laser off
+				Task_Next();
+			}
+
+			// if laser off
+			if (laser_on == 0)
+			{
+				// turn on laser toggle
+				laser_on = 1;
+				// write to laser -- fill in code
+				set_laser();
+				// set last start time
+				last_start_time = Now();
+			} 
+			else 
+			{
+				// switch off laser when button is released
+				if (PINC != 0){
+					laser_on = 0;
+					clear_laser();
+					last_start_time = 0;
+					// calculate cumulative_laser_time
+					unsigned long laser_on_time = Now() - last_start_time;
+					printf("laser turned on for %ld ticks\n", laser_on_time);
+				}
 			}
 		}
-	}
 
+		Task_Next();
+	}
 }
 
 bool within_deadband(int value, int base)
@@ -186,9 +198,9 @@ void translate_to_servo_command()
 	{
 		// turn left
 		// decrease value unless min threshold is reached
-		if ((i - 10) > MIN_X)
+		if ((i - pan_offset) > MIN_X)
 		{
-			i -= 10;
+			i -= pan_offset;
 			// printf("ugh1\n");
 			servo_set_pin_pan_2(i);
 		}
@@ -196,9 +208,9 @@ void translate_to_servo_command()
 
 	else if (joystick_X > joystick_X_base && !within_deadband(joystick_X, joystick_X_base))
 	{
-		if ((i + 10) < MAX_X)
+		if ((i + pan_offset) < MAX_X)
 		{
-			i += 10;
+			i += pan_offset;
 			// printf("ugh2\n");
 			servo_set_pin_pan_2(i);
 		}
@@ -206,9 +218,9 @@ void translate_to_servo_command()
 
 	if (joystick_Y < joystick_Y_base && !within_deadband(joystick_Y, joystick_Y_base))
 	{
-		if ((j - 8) > MIN_Y)
+		if ((j - tilt_offset) > MIN_Y)
 		{
-			j -= 8;
+			j -= tilt_offset;
 			// printf("here1\n");
 			servo_set_pin_tilt_3(j);
 		}
@@ -216,9 +228,9 @@ void translate_to_servo_command()
 
 	else if (joystick_Y > joystick_Y_base && !within_deadband(joystick_Y, joystick_Y_base))
 	{
-		if ((j + 8) < MAX_Y)
+		if ((j + tilt_offset) < MAX_Y)
 		{
-			j += 8;
+			j += tilt_offset;
 			// printf("here2\n");
 			servo_set_pin_tilt_3(j);
 		}
