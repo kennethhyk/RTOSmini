@@ -734,7 +734,7 @@ void main()
   
   printf("=====_OS_START_====\n");
   // // clear memory and prepare queues
-  Task_Create_RR(read_joystick, 1);
+  Task_Create_RR(drive_servo, 1);
 
   OS_Start();
 

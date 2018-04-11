@@ -20,7 +20,7 @@ int joystick_Y[num_joysticks] = {0, 0};
 
 int joystick_X_base[num_joysticks] = {501, 501};
 int joystick_Y_base[num_joysticks] = {510, 510};
-int deadband = 55;
+int deadband = 60;
 
 // averaging initialization
 int readings_X[num_joysticks][num_readings];
