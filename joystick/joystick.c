@@ -17,7 +17,7 @@
 
 void set_laser(){
   // use PB5 
-  int pin = 5;
+  int pin = 6;
   PINB |= ~(1 << pin);
 //   printf("SET PIN: %d\n", PINB);
 }
@@ -109,7 +109,7 @@ void read_joystick()
 		int a = joystick_RAW_X - joystick_X_base;
 		int b = joystick_RAW_Y - joystick_Y_base;
 		// printf("X: %d\nY: %d\n", joystick_RAW_X, joystick_RAW_Y);
-
+		// Task_Next();
 		if ((square(a) + square(b)) > square(deadband))
 		{
 			joystick_centered = 0;
@@ -138,16 +138,17 @@ void read_joystick()
 			translate_to_servo_command();
 		}
 
+		// calculate cumulative_laser_time
+		// 30 * 1000 / 10 ms interrupts
+		if (cumulative_laser_time > 40){
+			// turn laser off
+			clear_laser();
+			laser_on = 0;
+		}
 		// joystick pressed
 		// due to PUPDR, PINC == 0 means laser is on
-		if (PINC == 0 || laser_on == 1)
+		else if (PINC == 0 || laser_on == 1)
 		{	
-			// calculate cumulative_laser_time
-			// 30 * 1000 / 10 ms interrupts
-			if (cumulative_laser_time > 3000){
-				// turn laser off
-				Task_Next();
-			}
 
 			// if laser off
 			if (laser_on == 0)
@@ -165,16 +166,16 @@ void read_joystick()
 				if (PINC != 0){
 					laser_on = 0;
 					clear_laser();
-					last_start_time = 0;
 					// calculate cumulative_laser_time
 					unsigned long laser_on_time = Now() - last_start_time;
-					// printf("laser turned on for %ld ticks\n", laser_on_time);
+					last_start_time = 0;
+					printf("laser turned on for %ld ticks\n", laser_on_time);
 				}
 			}
 		}
 
-		read_photoressistor();
-		_delay_ms(1000);
+		// read_photoressistor();
+		// _delay_ms(50);
 		Task_Next();
 	}
 }
@@ -182,7 +183,7 @@ void read_joystick()
 void read_photoressistor(){
 	uint16_t pin = 3;
     int d = analog_read(pin);
-    printf("photoressistor value: %d\n", d);
+    // printf("photoressistor value: %d\n", d);
 }
 
 bool within_deadband(int value, int base)
@@ -200,8 +201,8 @@ void translate_to_servo_command()
 	uint16_t angle_y = 0;
 	uint16_t laser = 0;
 
-	printf("JX: %d, JY: %d\n", joystick_X, joystick_Y);
-
+	// printf("JX: %d, JY: %d\n", joystick_X, joystick_Y);
+	// return;
 	if (joystick_X < joystick_X_base && !within_deadband(joystick_X, joystick_X_base))
 	{
 		// turn left

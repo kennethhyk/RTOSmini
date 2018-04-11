@@ -18,11 +18,11 @@ int joystick_Y;
 int last_joystick_Y;
 
 int joystick_X_base = 496;
-int joystick_Y_base = 520;
+int joystick_Y_base = 494;
 
 int joystick_Btn = 0;
 int joystick_centered = 1;
-int deadband = 35;
+int deadband = 30;
 
 // averaging initialization
 int readings_X[numReadings];

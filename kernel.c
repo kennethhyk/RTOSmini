@@ -344,7 +344,7 @@ static void Next_Kernel_Request()
       if (laser_on)
       {
         cumulative_laser_time++;
-        // printf("Cumulative laser time: %d\n", cumulative_laser_time);
+        printf("Cumulative laser time: %d\n", cumulative_laser_time);
       }
   
       Dispatch();
