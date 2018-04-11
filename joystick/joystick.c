@@ -7,7 +7,7 @@
 #include "../servo/servo.c"
 #include "../os.h"
 
-#define bit_get(p, m) ((p) & (m))
+#define get_bit(p, m) ((p) & (m))
 
 // float get_current_time_msec()
 // {
@@ -168,13 +168,21 @@ void read_joystick()
 					last_start_time = 0;
 					// calculate cumulative_laser_time
 					unsigned long laser_on_time = Now() - last_start_time;
-					printf("laser turned on for %ld ticks\n", laser_on_time);
+					// printf("laser turned on for %ld ticks\n", laser_on_time);
 				}
 			}
 		}
 
+		read_photoressistor();
+		_delay_ms(1000);
 		Task_Next();
 	}
+}
+
+void read_photoressistor(){
+	uint16_t pin = 3;
+    int d = analog_read(pin);
+    printf("photoressistor value: %d\n", d);
 }
 
 bool within_deadband(int value, int base)

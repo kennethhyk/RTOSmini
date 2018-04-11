@@ -344,7 +344,7 @@ static void Next_Kernel_Request()
       if (laser_on)
       {
         cumulative_laser_time++;
-        printf("Cumulative laser time: %d\n", cumulative_laser_time);
+        // printf("Cumulative laser time: %d\n", cumulative_laser_time);
       }
   
       Dispatch();
@@ -553,7 +553,7 @@ ISR(TIMER4_COMPA_vect)
 {
   // toggle_LED_B3();
   num_ticks++;
-  printf("%d\n", num_ticks);
+  // printf("%d\n", num_ticks);
   OS_DI();
   Cp->request = TIMER;
   Enter_Kernel();
@@ -727,6 +727,7 @@ void main()
   stdin = &uart_input;
 
   init_joystick();
+
   init_servo();
 
   OS_Init();
