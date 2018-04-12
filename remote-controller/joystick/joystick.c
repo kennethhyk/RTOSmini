@@ -184,7 +184,7 @@ bool read_joystick(uint16_t pin_x, uint16_t pin_y, JOYSTICK_NUM joystick_id)
 // 	}
 // }
 
-void set_laser_value(packet * p)
+void set_laser_value()
 {
 	// calculate cumulative_laser_time
 	// 30 * 1000 / 10 ms interrupts
@@ -246,19 +246,22 @@ void send_joystick_packet()
 	uint16_t servo_pin_y = 3;
 
 	while (1)
-	{
-		read_joystick(roomba_pin_x, roomba_pin_y, ROOMBA);
-		// set roomba values
-		roomba_x = joystick_X[ROOMBA];
-		roomba_y = joystick_Y[ROOMBA];
-	
+	{	
+		roomba_x = OUT_OF_RANGE;
+		roomba_y = OUT_OF_RANGE;
+		if (read_joystick(roomba_pin_x, roomba_pin_y, ROOMBA)){
+			// set roomba values
+			roomba_x = joystick_X[ROOMBA];
+			roomba_y = joystick_Y[ROOMBA];	
+		};
+		
 		read_joystick(servo_pin_x, servo_pin_y, SERVO);
 		// set servo x,y
-		translate_to_servo_command(p);
+		translate_to_servo_command();
 
-		set_laser_value(p);
+		set_laser_value();
 		sendPacket(roomba_x, roomba_y, servo_x, servo_y, laser_on);
-		_delay_ms(100);
+		_delay_ms(10);
 	}
 }
 
@@ -270,18 +273,21 @@ void read_photoressistor()
 
 bool within_deadband(int value, int base)
 {
-	if (value > base + 25) || (value < base - 25)
+	if ((value > base + 25) || (value < base - 25))
 	{
 		return false;
 	}
 	return true;
 }
 
-void translate_to_servo_command(packet * p)
+void translate_to_servo_command()
 {
 	uint16_t angle_x = 0;
 	uint16_t angle_y = 0;
 	JOYSTICK_NUM joystick_id = SERVO;
+
+	servo_x = '&';
+	servo_y = '&';
 
 	if (joystick_X[joystick_id] < joystick_X_base[joystick_id] && !within_deadband(joystick_X[joystick_id], joystick_X_base[joystick_id]))
 	{

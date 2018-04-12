@@ -343,7 +343,7 @@ static void Next_Kernel_Request()
         Cp->state = READY;
       }
 
-      add to cumulative laser count if laser on
+      // add to cumulative laser count if laser on
       if (laser_on)
       {
         cumulative_laser_time++;

@@ -1,5 +1,6 @@
 #define num_readings 5
 #define num_joysticks 2
+#define OUT_OF_RANGE 9999
 
 typedef enum joystick_identifier {
     SERVO = 0,
