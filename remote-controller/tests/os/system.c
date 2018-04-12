@@ -1,0 +1,31 @@
+void Ping()
+{
+  printf("Started Ping\n");
+  printf("Finished Ping\n");
+}
+
+void Pong()
+{
+  printf("started pong\n");
+  printf("finished pong\n");
+}
+
+void Ding()
+{
+  printf("Started Ding\n");
+  printf("Finished Ding\n");
+}
+
+void Dong()
+{
+  printf("started Dong\n");
+  printf("finished Dong\n");
+}
+
+void a_main(){
+    Task_Create_System(Ping, 0);
+    Task_Create_System(Pong, 0);
+    Task_Create_System(Ding, 0);
+    Task_Create_System(Dong, 0);
+    // expect to see each task start and finish in order 
+}
