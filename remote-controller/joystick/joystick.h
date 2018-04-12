@@ -37,7 +37,7 @@ int total_Y[num_joysticks] = {0, 0};
 int average_Y[num_joysticks] = {0, 0};
 
 // laser 
-int laser_on = 0;
+uint8_t laser_on = 0;
 unsigned long last_start_time;
 unsigned long cumulative_laser_time = 0;
 

@@ -2,11 +2,11 @@
 #include "util/delay.h"
 
 // void sendPacket(packet * p){
-sendPacket(int roomba_x, int roomba_y, char servo_x, char servo_y, char laser)
+sendPacket(int roomba_x, int roomba_y, char servo_x, char servo_y, uint8_t laser)
 {
-	printf("roombax: %d, roombay: %d\n", roomba_x,   roomba_y);
-	printf("servox: %d, servoy: %d\n", servo_x,   servo_y);
-	printf("laser: %d\n",  laser);
+	// printf("roombax: %d, roombay: %d\n", roomba_x,   roomba_y);
+	// printf("servox: %d, servoy: %d\n", servo_x,   servo_y);
+	// printf("laser: %d\n",  laser);
  
 	//start packet
 	uart_putchar('?');

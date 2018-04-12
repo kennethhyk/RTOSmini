@@ -164,21 +164,21 @@ void drive_laser()
 	}
 }
 
-void drive_servo()
-{
-	uint16_t pin_x = 0;
-	uint16_t pin_y = 1;
-	JOYSTICK_NUM joystick_id = SERVO;
-	while (1)
-	{
-		if (read_joystick(pin_x, pin_y, joystick_id) == true)
-		{
-			translate_to_servo_command(joystick_id);
-		};
-		drive_laser();
-		Task_Next();
-	}
-}
+// void drive_servo()
+// {
+// 	uint16_t pin_x = 0;
+// 	uint16_t pin_y = 1;
+// 	JOYSTICK_NUM joystick_id = SERVO;
+// 	while (1)
+// 	{
+// 		if (read_joystick(pin_x, pin_y, joystick_id) == true)
+// 		{
+// 			translate_to_servo_command(joystick_id);
+// 		};
+// 		drive_laser();
+// 		Task_Next();
+// 	}
+// }
 
 void read_photoressistor()
 {
@@ -193,51 +193,4 @@ bool within_deadband(int value, int base)
 	if (value < base - 25)
 		return false;
 	return true;
-}
-
-void translate_to_servo_command(JOYSTICK_NUM joystick_id)
-{
-	uint16_t angle_x = 0;
-	uint16_t angle_y = 0;
-	uint16_t laser = 0;
-
-	if (joystick_X[joystick_id] < joystick_X_base[joystick_id] && !within_deadband(joystick_X[joystick_id], joystick_X_base[joystick_id]))
-	{
-		// left
-		if ((i - pan_offset) > MIN_X)
-		{
-			i -= pan_offset;
-			servo_set_pin_pan_2(i);
-		}
-	}
-
-	else if (joystick_X[joystick_id] > joystick_X_base[joystick_id] && !within_deadband(joystick_X[joystick_id], joystick_X_base[joystick_id]))
-	{
-		// right
-		if ((i + pan_offset) < MAX_X)
-		{
-			i += pan_offset;
-			servo_set_pin_pan_2(i);
-		}
-	}
-
-	if (joystick_Y[joystick_id] < joystick_Y_base[joystick_id] && !within_deadband(joystick_Y[joystick_id], joystick_Y_base[joystick_id]))
-	{
-		// down 
-		if ((j - tilt_offset) > MIN_Y)
-		{
-			j -= tilt_offset;
-			servo_set_pin_tilt_3(j);
-		}
-	}
-
-	if (joystick_Y[joystick_id] > joystick_Y_base[joystick_id] && !within_deadband(joystick_Y[joystick_id], joystick_Y_base[joystick_id]))
-	{
-		// up
-		if ((j + tilt_offset) < MAX_Y)
-		{
-			j += tilt_offset;
-			servo_set_pin_tilt_3(j);
-		}
-	}
 }

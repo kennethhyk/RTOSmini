@@ -12,7 +12,8 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
-#include "joystick/joystick.c"
+// #include "joystick/joystick.c"
+#include "servo/servo.c"
 #include "roomba/roomba.c"
 #include "bluetooth/bluetooth.c"
 
@@ -725,13 +726,21 @@ void Ding()
   * will run forever.
   */
 
+void servoDrive() {
+  
+}
+
 void recvpackt(){
+  int roomba_x, roomba_y;
+  char servo_x, servo_y;
+  uint8_t laser = 0;
   while(1)
   {
-    int roomba_x, roomba_y;
-    char servo_x, servo_y, laser;
     receivePacket(&roomba_x, &roomba_y, &servo_x, &servo_y, &laser);
-    printf("roomba_x: %d, roomba_y: %d\nservo_x: %c, servo_y: %c\nlaser: %d\n", roomba_x, roomba_y, servo_x, servo_y, laser);
+    translate_to_servo_command(servo_x, servo_y);
+    translate_to_laser(laser);
+    // printf("roomba_x: %d, roomba_y: %d\nservo_x: %c, servo_y: %c\nlaser: %d\n", roomba_x, roomba_y, servo_x, servo_y, laser);
+    // printf("servo_x: %c, servo_y: %c\n",servo_x, servo_y);
   }
 }
 

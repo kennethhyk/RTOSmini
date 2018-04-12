@@ -12,7 +12,7 @@ char servo_x;
 char servo_y;
 int roomba_x;
 int roomba_y;
-char laser = 0; 
+char laser = 'b'; 
 
 void set_laser()
 {
@@ -188,7 +188,7 @@ void set_laser_value()
 {
 	// calculate cumulative_laser_time
 	// 30 * 1000 / 10 ms interrupts
-	if (cumulative_laser_time > 40)
+	if (cumulative_laser_time > 400)
 	{
 		laser_on = 0;
 		return;
@@ -249,19 +249,23 @@ void send_joystick_packet()
 	{	
 		roomba_x = OUT_OF_RANGE;
 		roomba_y = OUT_OF_RANGE;
-		if (read_joystick(roomba_pin_x, roomba_pin_y, ROOMBA)){
+		if (read_joystick(roomba_pin_x, roomba_pin_y, ROOMBA) == true){
 			// set roomba values
 			roomba_x = joystick_X[ROOMBA];
 			roomba_y = joystick_Y[ROOMBA];	
 		};
 		
-		read_joystick(servo_pin_x, servo_pin_y, SERVO);
-		// set servo x,y
-		translate_to_servo_command();
+		if(read_joystick(servo_pin_x, servo_pin_y, SERVO) == true){
+			translate_to_servo_command();
+		} else {
+			servo_x = '&';
+			servo_y = '&';
+		}
 
 		set_laser_value();
+		printf("%d\n", laser_on);
 		sendPacket(roomba_x, roomba_y, servo_x, servo_y, laser_on);
-		_delay_ms(10);
+		_delay_ms(40);
 	}
 }
 
@@ -329,7 +333,7 @@ void translate_to_servo_command()
 		// }
 	}
 
-	if (joystick_Y[joystick_id] > joystick_Y_base[joystick_id] && !within_deadband(joystick_Y[joystick_id], joystick_Y_base[joystick_id]))
+	else if (joystick_Y[joystick_id] > joystick_Y_base[joystick_id] && !within_deadband(joystick_Y[joystick_id], joystick_Y_base[joystick_id]))
 	{
 		// up
 		servo_y = 'U';

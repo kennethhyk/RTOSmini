@@ -6,25 +6,25 @@ typedef enum packetEnum {
 	PEND = '.'
 } packetEnum;
 
-void sendPacket(packet * p){
-	//start packet
-	uart_putchar('?');
+// void sendPacket(packet * p){
+// 	//start packet
+// 	uart_putchar('?');
 	
-	uart_putchar( p->roomba_x & 0xff );
-	uart_putchar( (p->roomba_x>>8) & 0xff);
+// 	uart_putchar( p->roomba_x & 0xff );
+// 	uart_putchar( (p->roomba_x>>8) & 0xff);
 
-	uart_putchar( p->roomba_y & 0xff );
-	uart_putchar( (p->roomba_y>>8) & 0xff);
+// 	uart_putchar( p->roomba_y & 0xff );
+// 	uart_putchar( (p->roomba_y>>8) & 0xff);
 
-	uart_putchar( p->servo_x & 0xff );
-	uart_putchar( p->servo_y & 0xff );
+// 	uart_putchar( p->servo_x & 0xff );
+// 	uart_putchar( p->servo_y & 0xff );
 
-	uart_putchar( p->laser & 0xff );
+// 	uart_putchar( p->laser & 0xff );
 
-	//end packet
-	uart_putchar('.');
+// 	//end packet
+// 	uart_putchar('.');
 
-}
+// }
 
 int buildInt(unsigned char H, unsigned char L){
 	int i = 0;
@@ -33,7 +33,7 @@ int buildInt(unsigned char H, unsigned char L){
 	return i;
 }
 
-void receivePacket(int * roomba_x, int * roomba_y, char * servo_x, char * servo_y, char * laser){
+void receivePacket(int * roomba_x, int * roomba_y, char * servo_x, char * servo_y, uint8_t * laser){
 	int start = 0;
 
 	unsigned char x_H = 0;
