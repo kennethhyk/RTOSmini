@@ -5,7 +5,6 @@
 #include "os.h"
 
 #include "uart/uart.c"
-#include "bluetooth/bluetooth.c"
 #include <string.h>
 #include <avr/io.h>
 #include <util/delay.h>
@@ -15,6 +14,7 @@
 #include "queue.c"
 #include "joystick/joystick.c"
 #include "roomba/roomba.c"
+#include "bluetooth/bluetooth.c"
 
 //tests - ipc
 // #include "tests/ipc/ipc_receiver_mask.c"
@@ -725,6 +725,16 @@ void Ding()
   * will run forever.
   */
 
+void recvpackt(){
+  while(1)
+  {
+    int roomba_x, roomba_y;
+    char servo_x, servo_y, laser;
+    receivePacket(&roomba_x, &roomba_y, &servo_x, &servo_y, &laser);
+    printf("roomba_x: %d, roomba_y: %d\nservo_x: %c, servo_y: %c\nlaser: %d\n", roomba_x, roomba_y, servo_x, servo_y, laser);
+  }
+}
+
 void main()
 {
 
@@ -734,12 +744,15 @@ void main()
   stdout = &uart_output;
   stdin = &uart_input;
 
+  // initialize roomba
+  // start + safe mode
   uart_putchar_2((uint8_t)128);
   _delay_ms(20);
   uart_putchar_2((uint8_t)131);
   _delay_ms(800);
 
-  init_joystick();
+  // init laser
+ 	DDRB = 0xFF;
   init_servo();
   
 //============================================================
@@ -769,7 +782,7 @@ void main()
   //   }
   // }
 //================AUTONOMOUS ROOMBA============================================
-  cruiseMode();
+
 //==================ROOMBA SENSOR READ=======================================
   // uart_putchar_0((uint8_t)142);
   // uart_putchar_0((uint8_t)7);
@@ -786,7 +799,8 @@ void main()
   printf("=====_OS_START_====\n");
   // // clear memory and prepare queues
 
-  Task_Create_RR(drive_servo, 1);
+  // Task_Create_RR(cruiseMode, 1);
+  Task_Create_System(recvpackt, 1);
 
   OS_Start();
   printf("=====_OS_END_====\n");

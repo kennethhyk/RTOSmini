@@ -50,10 +50,6 @@ void init_joystick()
 
 	// joystick button as input
 	DDRC = 0x00;
-
-	// set laser as output
-	DDRB = 0xFF;
-	initReadings();
 }
 
 /**
