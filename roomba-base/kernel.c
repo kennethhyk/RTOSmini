@@ -16,6 +16,7 @@
 #include "servo/servo.c"
 #include "roomba/roomba.c"
 #include "bluetooth/bluetooth.c"
+#include "photoressistor/health.c"
 
 //tests - ipc
 // #include "tests/ipc/ipc_receiver_mask.c"
@@ -709,16 +710,13 @@ void OS_Abort(unsigned int error)
   }
 }
 
-void Pong()
+bool am_i_dead(int p)
 {
-  printf("Executed pong\n");
-  Task_Next();
-}
+  if (p > DEATH_THRESHOLD){
+    return true;
+  }
 
-void Ding()
-{
-  printf("Executed Ding\n");
-  Task_Next();
+  return false;
 }
 
 /**
@@ -730,13 +728,21 @@ void start(){
   srand((unsigned int) 28); //seed
   int roomba_x, roomba_y;
   char servo_x, servo_y;
+
   uint8_t laser, changeMode;
   int driveMode = 0; // cruise0, manual1
   int mode = 0;//active0, stationary1, dead2 
   int escapeBefore = 0;
   int changeModeBefore = 0;
+
   while(1)
   {
+    photoressistor =  read_photoressistors();
+    if (am_i_dead(photoressistor)){
+      // die
+      mode = 2;
+    }
+
     receivePacket(&roomba_x, &roomba_y, &servo_x, &servo_y, &laser, &changeMode);
     translate_to_servo_command(servo_x, servo_y);
     translate_to_laser(laser);
@@ -805,6 +811,7 @@ void start(){
         spinMode(roomba_y);
         break;
       case 2: //die
+        driveDirect(0,0);
         break;
     }
 
@@ -833,52 +840,13 @@ void main()
   // init laser
  	DDRB = 0xFF;
   init_servo();
-  
-//============================================================
-  // uart_putchar_0(128);
-  // _delay_ms(20);
-  // uart_putchar_0(131);
-  // _delay_ms(1000);
-
-  // int x = 0x0;
-  // int y = 0x0;
-  // while(1){
-  //   receivePacket(&x, &y);
-  //   // printf("%d, %d\n", x, y);
-  //   translateToMotion(x, y);
-  //   x = 0;
-  //   y = 0;
-  // }
-//============================================================
-  // while(1) {
-  //   readJoyStick();
-  //   if(joystick_centered != 1){
-  //     // printf("sending: %d, %d\n", joystick_X,joystick_Y);
-  //     sendPacket(joystick_X, joystick_Y);
-  //   } 
-  //   else if(joystick_centered == 1) {
-  //     sendPacket(0, 0);
-  //   }
-  // }
-//================AUTONOMOUS ROOMBA============================================
-
-//==================ROOMBA SENSOR READ=======================================
-  // uart_putchar_0((uint8_t)142);
-  // uart_putchar_0((uint8_t)7);
-  // printf("unsigned int: %x\n", (uint8_t)142);
-  // printf("signed char: %x\n", (char)142);
-  // printf("int: %x\n", 142);
-  // while(1) {
-  //   uint8_t c = uart_getchar();
-  //   printf("received: %x\n", c);
-  // }
-//============================================================
+  init_photoressistors();
 
   OS_Init();  
   printf("=====_OS_START_====\n");
-  // // clear memory and prepare queues
+  // clear memory and prepare queues
 
-  // Task_Create_RR(cruiseMode, 1);
+  Task_Create_RR(cruiseMode, 1);
   Task_Create_System(start, 1);
 
   OS_Start();
