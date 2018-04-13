@@ -546,7 +546,7 @@ void init_timer()
   // set compare match register for 1hz increments
   TCCR4B |= (1 << WGM12);
   // OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
-  OCR4A = 1000;
+  OCR4A = 15625;
   // Set CS10 and CS12 bits for 1024 prescaler
   TCCR4B |= (1 << CS12) | (1 << CS10);
 
@@ -726,19 +726,89 @@ void Ding()
   * will run forever.
   */
 
-void servoDrive() {
-  
-}
-
-void recvpackt(){
+void start(){
+  srand((unsigned int) 28); //seed
   int roomba_x, roomba_y;
   char servo_x, servo_y;
-  uint8_t laser = 0;
+  uint8_t laser, changeMode;
+  int driveMode = 0; // cruise0, manual1
+  int mode = 0;//active0, stationary1, dead2 
+  int escapeBefore = 0;
+  int changeModeBefore = 0;
   while(1)
   {
-    receivePacket(&roomba_x, &roomba_y, &servo_x, &servo_y, &laser);
+    receivePacket(&roomba_x, &roomba_y, &servo_x, &servo_y, &laser, &changeMode);
     translate_to_servo_command(servo_x, servo_y);
     translate_to_laser(laser);
+    if(num_ticks%60 == 0 && num_ticks != 0 && changeModeBefore == 0){
+        if(mode == 0){
+            mode = 1;
+        }
+        else if(mode == 1){
+            mode = 0;
+        }
+        changeModeBefore = 1;
+    }
+    if(num_ticks%11 == 0 && num_ticks != 0) {
+        changeModeBefore = 0;
+    }
+    if(changeMode == 1) {
+      _delay_ms(150);
+      if(driveMode == 0){
+        driveMode = 1;
+      }
+      else if(driveMode == 1){
+        driveMode = 0;
+      }
+    }
+    // printf("current mode: %d\n", mode);
+    switch(mode){
+      case 0:
+        if(driveMode == 0){
+            _delay_ms(20);
+            sense();
+            // printf("%x, %x\n", bumper, virtual_wall);
+            if((bumper == 0 && virtual_wall == 0) || escapeBefore == 1){
+                //no collision
+                cruise();
+                escapeBefore = 0;
+            } else {
+                if(virtual_wall == 1){
+                      escape(-200, -200, 1); //backward
+                      escape(200, -200, 3); //left
+                      virtual_wall = 0;
+                  }
+                  else if(bumper == 1){
+                      escape(-200, -200, 1); //backward
+                      escape(200, -200, 2); //left
+                      bumper = 0;
+                  }
+                  else if(bumper == 2){
+                      escape(-200, -200, 1); //backward
+                      escape(-200, 200, 2); //right
+                      bumper = 0;
+                  }
+                  else if(bumper == 3){
+                      escape(-200, -200, 1); //backward
+                      escape(200, -200, 3); //left
+                      bumper = 0;
+                  }
+                  escapeBefore = 1;
+                  choice = rand() % 3;
+            }
+        }
+        if(driveMode == 1){
+          translateToMotion_roomba(roomba_x, roomba_y);
+        }
+        break;
+      case 1: //spin mode
+        spinMode(roomba_y);
+        break;
+      case 2: //die
+        break;
+    }
+
+    // printf("roomba_x: %d, roomba_y: %d\n", roomba_x, roomba_y);
     // printf("roomba_x: %d, roomba_y: %d\nservo_x: %c, servo_y: %c\nlaser: %d\n", roomba_x, roomba_y, servo_x, servo_y, laser);
     // printf("servo_x: %c, servo_y: %c\n",servo_x, servo_y);
   }
@@ -809,7 +879,7 @@ void main()
   // // clear memory and prepare queues
 
   // Task_Create_RR(cruiseMode, 1);
-  Task_Create_System(recvpackt, 1);
+  Task_Create_System(start, 1);
 
   OS_Start();
   printf("=====_OS_END_====\n");

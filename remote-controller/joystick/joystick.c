@@ -14,6 +14,8 @@ int roomba_x;
 int roomba_y;
 char laser = 'b'; 
 
+bool should_change_mode = false;
+
 void set_laser()
 {
 	// use PB5
@@ -57,7 +59,7 @@ void init_joystick()
 
 	// joystick button as input
 	DDRC = 0x00;
-
+	DDRA = 0x00;
 	// set laser as output
 	DDRB = 0xFF;
 	initReadings();
@@ -221,6 +223,28 @@ void set_laser_value()
 	}
 }
 
+void set_changeMode(){
+	if (PINA == 0 || change_mode == 1)
+	{
+		// if laser off
+		if (change_mode == 0)
+		{
+			change_mode = 1;
+		}
+		else
+		{
+			// switch of laser when button is released
+			if (PINA != 0)
+			{
+				change_mode = 0;
+				should_change_mode = true;
+				return;
+			}
+		}
+	}
+	should_change_mode = false;
+}
+
 void drive_servo()
 {
 
@@ -263,9 +287,15 @@ void send_joystick_packet()
 		}
 
 		set_laser_value();
-		printf("%d\n", laser_on);
-		sendPacket(roomba_x, roomba_y, servo_x, servo_y, laser_on);
-		_delay_ms(40);
+		set_changeMode();
+		if(should_change_mode) {
+			// change_mode = 0;
+			sendPacket(roomba_x, roomba_y, servo_x, servo_y, laser_on, change_mode);	
+		} else {
+			// change_mode = 1;
+			sendPacket(roomba_x, roomba_y, servo_x, servo_y, laser_on, change_mode);
+		}
+		_delay_ms(20);
 	}
 }
 

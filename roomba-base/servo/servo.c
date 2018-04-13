@@ -8,13 +8,17 @@
 
 // MG995 middle:1350 us, +/- 870 ms
 
-uint16_t MIN_X = 200;
-uint16_t MAX_X = 600;
-uint16_t MIN_Y = 490;
-uint16_t MAX_Y = 650;
+// uint16_t MIN_X = 200;
+// uint16_t MAX_X = 600;
+// uint16_t MIN_Y = 490;
+// uint16_t MAX_Y = 650;
+uint16_t MIN_X = 300;
+uint16_t MAX_X = 500;
+uint16_t MIN_Y = 300;
+uint16_t MAX_Y = 500;
 
-uint16_t i = 500;
-uint16_t j = 500; // to account for pan motor height
+uint16_t i = 400;
+uint16_t j = 400; // to account for pan motor height
 uint16_t pan_offset = 1;
 uint16_t tilt_offset = 1;
 
@@ -36,8 +40,8 @@ void init_servo(){
 	TCCR3B |= (1<<CS31)|(1<<CS30);
 
 	OCR3A = 5000;  //20 ms period
-	OCR3B = 500;  // base positions pan
-	OCR3C = 500;  // base position tilt
+	OCR3B = 400;  // base positions pan
+	OCR3C = 400;  // base position tilt
 }
 
 void set_laser()

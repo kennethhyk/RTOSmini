@@ -9,7 +9,7 @@ void driveDirect(int vr, int vl) {
 }
 
 void translateToMotion_roomba(int joystick_X,int joystick_Y){
-    if(joystick_X == 0 && joystick_Y == 0) {
+    if(joystick_X == 9999 || joystick_Y == 9999) {
       //stop
       driveDirect(0, 0);
       return;

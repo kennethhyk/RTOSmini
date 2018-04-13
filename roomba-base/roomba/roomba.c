@@ -9,7 +9,7 @@ void driveDirect(int vr, int vl) {
 }
 
 void translateToMotion_roomba(int joystick_X,int joystick_Y){
-    if(joystick_X == 0 && joystick_Y == 0) {
+    if(joystick_X == 9999 || joystick_Y == 9999) {
       //stop
       driveDirect(0, 0);
       return;
@@ -32,13 +32,13 @@ void translateToMotion_roomba(int joystick_X,int joystick_Y){
     }
     if(power_Y >= power_X) {
       if((joystick_Y-509) > 0){
-        X = -200 * power_Y;
-        Y = 200 * power_Y;
+        X = 200 * power_Y;
+        Y = -200 * power_Y;
         driveDirect(X, Y);
       }
       if((joystick_Y-509) <= 0){
-        X = 200 * power_Y;
-        Y = -200 * power_Y;
+        X = -200 * power_Y;
+        Y = 200 * power_Y;
         driveDirect(X, Y);
       }
     }
@@ -46,15 +46,23 @@ void translateToMotion_roomba(int joystick_X,int joystick_Y){
 
 void sense(){
 	//query bumper and virtual wall sensors
-	for(int c = 0;c<2;c++){
-		int garbage = UDR2;
-	}
-    uart_putchar_2((uint8_t)149);
-    uart_putchar_2((uint8_t)2);
+ //    int garbage = 0;
+	// for(int c = 0;c<3;c++){
+	// 	garbage = UDR2;
+	// }
+    uart_putchar_2((uint8_t)142);
     uart_putchar_2((uint8_t)7);
-    uart_putchar_2((uint8_t)13);
     bumper = UDR2;
+    if(UDR2 == 2 || UDR2 == 3){
+        bumper = UDR2;
+    }
+    _delay_ms(15);
+    uart_putchar_2((uint8_t)142);
+    uart_putchar_2((uint8_t)13);
     virtual_wall = UDR2;
+    if(virtual_wall == 2 || virtual_wall == 3){
+        virtual_wall = 0;
+    }
 }
 void cruise(){
 	//left circle cruise
@@ -81,18 +89,50 @@ void cruise(){
 void escape(int X, int Y, int period){
     driveDirect(X, Y);
     if(period == 1){
-        _delay_ms(400);
+        _delay_ms(200);
     }
     if(period == 2){
-        _delay_ms(1000);
+        _delay_ms(400);
     }
     if(period == 3){
         _delay_ms(2000);
     }
 }
+
+void spinMode(int joystick_Y){
+    if(joystick_Y == 9999) {
+      //stop
+      driveDirect(0, 0);
+      return;
+    }
+    float power_Y = 0;
+    power_Y = abs(joystick_Y-509)/515.00;
+    int X = 0;
+    int Y = 0;
+      if((joystick_Y-509) > 0){
+        X = 200 * power_Y;
+        Y = -200 * power_Y;
+        driveDirect(X, Y);
+      }
+      if((joystick_Y-509) <= 0){
+        X = -200 * power_Y;
+        Y = 200 * power_Y;
+        driveDirect(X, Y);
+      }
+}
+
 void cruiseMode(){
+    int roomba_x, roomba_y;
+    char servo_x, servo_y;
+    uint8_t laser, changeMode;
 	srand((unsigned int) 28); //seed
     while(1){
+        receivePacket(&roomba_x, &roomba_y, &servo_x, &servo_y, &laser, &changeMode);
+        translate_to_servo_command(servo_x, servo_y);
+        translate_to_laser(laser);
+        if(roomba_x != 9999 || roomba_y != 9999){
+            break;
+        }
         sense();
         // printf("%x, %x\n", bumper, virtual_wall);
         if(bumper == 0 && virtual_wall == 0){

@@ -33,7 +33,7 @@ int buildInt(unsigned char H, unsigned char L){
 	return i;
 }
 
-void receivePacket(int * roomba_x, int * roomba_y, char * servo_x, char * servo_y, uint8_t * laser){
+void receivePacket(int * roomba_x, int * roomba_y, char * servo_x, char * servo_y, uint8_t * laser, uint8_t * changeMode){
 	int start = 0;
 
 	unsigned char x_H = 0;
@@ -73,6 +73,10 @@ void receivePacket(int * roomba_x, int * roomba_y, char * servo_x, char * servo_
 
 		else if(start == 7){
 			*laser = newChar;
+		}
+
+		else if(start == 8){
+			*changeMode = newChar;
 		}
 
 		else
