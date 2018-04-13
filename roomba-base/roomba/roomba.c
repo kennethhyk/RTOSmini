@@ -1,5 +1,10 @@
 #include "roomba.h"
 
+void playSong(uint8_t song) {
+	uart_putchar_2(141);
+	uart_putchar_2(song);
+}
+
 void driveDirect(int vr, int vl) {
 	uart_putchar_2(145);
 	uart_putchar_2((vr>>8) & 0xff);
