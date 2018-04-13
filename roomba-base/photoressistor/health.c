@@ -5,7 +5,7 @@
 #include <math.h>
 #include "../os.h"
 
-#define DEATH_THRESHOLD 82 
+#define DEATH_THRESHOLD 100 
 
 void init_photoressistors()
 {
@@ -71,7 +71,7 @@ int read_photoressistors()
 
 	int d = analog_read(pin_0);
 
-    printf("Pin 0 Val: %d\n", d);
+    // printf("Pin 0 Val: %d\n", d);
     return d;    
 }
 
