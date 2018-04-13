@@ -190,7 +190,7 @@ void set_laser_value()
 {
 	// calculate cumulative_laser_time
 	// 30 * 1000 / 10 ms interrupts
-	if (cumulative_laser_time > 400)
+	if (cumulative_laser_time > 30)
 	{
 		laser_on = 0;
 		return;

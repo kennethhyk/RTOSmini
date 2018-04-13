@@ -544,7 +544,7 @@ void init_timer()
   // set compare match register for 1hz increments
   TCCR4B |= (1 << WGM12);
   // OCR1A = 15624; // = (16*10^6) / (1*1024) - 1 (must be <65536)
-  OCR4A = 1000;
+  OCR4A = 15625;
   // Set CS10 and CS12 bits for 1024 prescaler
   TCCR4B |= (1 << CS12) | (1 << CS10);
 
