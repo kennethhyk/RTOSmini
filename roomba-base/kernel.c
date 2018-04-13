@@ -725,6 +725,7 @@ bool am_i_dead(int p)
   */
 
 void start(){
+  playSong(2);
   srand((unsigned int) 28); //seed
   int roomba_x, roomba_y;
   char servo_x, servo_y;
@@ -734,6 +735,7 @@ void start(){
   int mode = 0;//active0, stationary1, dead2 
   int escapeBefore = 0;
   int changeModeBefore = 0;
+  int photoressistor = 0;
 
   while(1)
   {
@@ -741,6 +743,7 @@ void start(){
     if (am_i_dead(photoressistor)){
       // die
       mode = 2;
+      playSong(1);
     }
 
     receivePacket(&roomba_x, &roomba_y, &servo_x, &servo_y, &laser, &changeMode);
@@ -754,6 +757,7 @@ void start(){
             mode = 0;
         }
         changeModeBefore = 1;
+        playSong(3);
     }
     if(num_ticks%11 == 0 && num_ticks != 0) {
         changeModeBefore = 0;
@@ -812,6 +816,7 @@ void start(){
         break;
       case 2: //die
         driveDirect(0,0);
+        OS_Abort(1);
         break;
     }
 
