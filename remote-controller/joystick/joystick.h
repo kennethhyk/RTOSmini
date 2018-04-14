@@ -57,12 +57,3 @@ void initReadings(){
         }
     }
 }
-
-// packet
-typedef struct data_packet {
-    char servo_x;
-    char servo_y;
-    int roomba_x;
-    int roomba_y;
-    uint8_t laser;
-} packet;

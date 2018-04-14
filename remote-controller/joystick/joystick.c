@@ -90,9 +90,6 @@ bool read_joystick(uint16_t pin_x, uint16_t pin_y, JOYSTICK_NUM joystick_id)
 	joystick_RAW_X[joystick_id] = analog_read(pin_y);
 	joystick_RAW_Y[joystick_id] = analog_read(pin_x);
 
-	// printf("RAWX: %d\n", joystick_RAW_X[joystick_id]);
-	// printf("RAWY: %d\n", joystick_RAW_Y[joystick_id]);
-
 	int a = joystick_RAW_X[joystick_id] - joystick_X_base[joystick_id];
 	int b = joystick_RAW_Y[joystick_id] - joystick_Y_base[joystick_id];
 
