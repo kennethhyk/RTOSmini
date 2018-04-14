@@ -196,13 +196,13 @@ void send_joystick_packet()
 	{	
 		roomba_x = OUT_OF_RANGE;
 		roomba_y = OUT_OF_RANGE;
-		if (read_joystick(roomba_pin_x, roomba_pin_y, ROOMBA) == true){
+		if (read_joystick(roomba_pin_x, roomba_pin_y, ROOMBA)){
 			// set roomba values
 			roomba_x = joystick_X[ROOMBA];
 			roomba_y = joystick_Y[ROOMBA];	
 		};
 		
-		if(read_joystick(servo_pin_x, servo_pin_y, SERVO) == true){
+		if(read_joystick(servo_pin_x, servo_pin_y, SERVO)){
 			translate_to_servo_command();
 		} else {
 			servo_x = '&';
