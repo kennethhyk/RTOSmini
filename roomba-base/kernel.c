@@ -12,7 +12,6 @@
 #include "./LED/LED_Test.c"
 #include "kernel.h"
 #include "queue.c"
-// #include "joystick/joystick.c"
 #include "servo/servo.c"
 #include "roomba/roomba.c"
 #include "bluetooth/bluetooth.c"
@@ -703,9 +702,9 @@ void Msg_ASend(PID id, MTYPE t, unsigned int v)
 void OS_Abort(unsigned int error)
 {
   OS_DI();
+  playSong(1);
   while (1)
   {
-    // toggle_LED_B3();
     _delay_ms(500);
   }
 }
@@ -743,7 +742,6 @@ void start(){
     if (am_i_dead(photoressistor)){
       // die
       mode = 2;
-      playSong(1);
     }
 
     receivePacket(&roomba_x, &roomba_y, &servo_x, &servo_y, &laser, &changeMode);
@@ -771,7 +769,7 @@ void start(){
         driveMode = 0;
       }
     }
-    // printf("current mode: %d\n", mode);
+
     switch(mode){
       case 0:
         if(driveMode == 0){
@@ -785,7 +783,7 @@ void start(){
             } else {
                 if(virtual_wall == 1){
                       escape(-200, -200, 1); //backward
-                      escape(200, -200, 3); //left
+                      escape(200, -200, 4); //left
                       virtual_wall = 0;
                   }
                   else if(bumper == 1){
@@ -820,9 +818,6 @@ void start(){
         break;
     }
 
-    // printf("roomba_x: %d, roomba_y: %d\n", roomba_x, roomba_y);
-    // printf("roomba_x: %d, roomba_y: %d\nservo_x: %c, servo_y: %c\nlaser: %d\n", roomba_x, roomba_y, servo_x, servo_y, laser);
-    // printf("servo_x: %c, servo_y: %c\n",servo_x, servo_y);
   }
 }
 
@@ -851,7 +846,6 @@ void main()
   printf("=====_OS_START_====\n");
   // clear memory and prepare queues
 
-  Task_Create_RR(cruiseMode, 1);
   Task_Create_System(start, 1);
 
   OS_Start();

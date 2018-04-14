@@ -1,11 +1,10 @@
 /**
  * @file   uart.c
- * @author Justin Tanner
- * @date   Sat Nov 22 21:32:03 2008
- *
- * @brief  UART Driver targetted for the AT90USB1287
+ * @brief  Ported from justin tanners implementaion of
+ *         UART Driver targetted for the AT90USB1287
  *
  */
+
 #include "uart.h"
 #define F_CPU 16000000UL
 
@@ -145,15 +144,6 @@ uint8_t uart_get_byte(int index)
     return 0;
 }
 
-// uint8_t uart_get_byte_0(int index)
-// {
-//     if (index < UART_BUFFER_SIZE)
-//     {
-//         return uart_buffer_0[index];
-//     }
-//     return 0;
-// }
-
 uint8_t uart_get_byte_2(int index)
 {
     if (index < UART_BUFFER_SIZE)
@@ -162,6 +152,7 @@ uint8_t uart_get_byte_2(int index)
     }
     return 0;
 }
+
 /**
  * Get the number of bytes received on UART
  *
@@ -171,10 +162,7 @@ uint8_t uart_bytes_received(void)
 {
     return uart_buffer_index;
 }
-// uint8_t uart_bytes_received_0(void)
-// {
-//     return uart_buffer_index_0;
-// }
+
 uint8_t uart_bytes_received_2(void)
 {
     return uart_buffer_index_2;
@@ -189,32 +177,10 @@ void uart_reset_receive(void)
     uart_buffer_index = 0;
 }
 
-// void uart_reset_receive_0(void)
-// {
-//     uart_buffer_index_0 = 0;
-// }
-
 void uart_reset_receive_2(void)
 {
     uart_buffer_index_2 = 0;
 }
-
-/**
- * UART receive byte ISR
- */
-// ISR(USART1_RX_vect)
-// {
-// 	while(!(UCSR1A & (1<<RXC1)));
-//     uart_buffer[uart_buffer_index] = UDR1;
-//     uart_buffer_index = (uart_buffer_index + 1) % UART_BUFFER_SIZE;
-// }
-
-// ISR(USART0_RX_vect)
-// {
-//     while(!(UCSR0A & (1<<RXC0)));
-//     uart_buffer_0[uart_buffer_index_0] = UDR0;
-//     uart_buffer_index_0 = (uart_buffer_index_0 + 1) % UART_BUFFER_SIZE;
-// }
 
 ISR(USART2_RX_vect)
 {

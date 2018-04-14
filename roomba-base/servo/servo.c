@@ -1,17 +1,5 @@
-/**
- * \file servo.h
- * \brief Simple control of a servo using hardware PWM.
- *
- * Created: 19/08/2013 9:16:26 AM
- *  \Author: Daniel McIlvaney
- */
-
 // MG995 middle:1350 us, +/- 870 ms
 
-// uint16_t MIN_X = 200;
-// uint16_t MAX_X = 600;
-// uint16_t MIN_Y = 490;
-// uint16_t MAX_Y = 650;
 uint16_t MIN_X = 300;
 uint16_t MAX_X = 500;
 uint16_t MIN_Y = 300;
@@ -44,27 +32,11 @@ void init_servo(){
 	OCR3C = 400;  // base position tilt
 }
 
-void set_laser()
-{
-	// use PB5
-	int pin = 6;
-	PINB |= ~(1 << pin);
-}
-
-void clear_laser()
-{
-	// use PB5
-	int pin = 6;
-	PINB &= (~(1) << pin);
-}
-
 void translate_to_laser(uint8_t l) {
 	if(l == 1){
-		// set_laser();
 		PORTB = 0xFF;
 	} 
 	else if(l == 0){
-		// clear_laser();
 		PORTB = 0x00;
 	}
 }

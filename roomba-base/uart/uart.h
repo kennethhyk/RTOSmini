@@ -1,9 +1,7 @@
 /**
  * @file   uart.c
- * @author Justin Tanner
- * @date   Sat Nov 22 21:32:03 2008
- *
- * @brief  UART Driver targetted for the AT90USB1287
+ * @brief  Ported from justin tanners implementaion of
+ *         UART Driver targetted for the AT90USB1287
  *
  */
 

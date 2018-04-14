@@ -2,8 +2,7 @@
  * \file servo.h
  * \brief Simple control of a servo using hardware PWM.
  *
- * Created: 19/08/2013 9:16:26 AM
- *  \Author: Daniel McIlvaney
+ *  \Ported from Daniel McIlvaney's implementation
  */
 
 // MG995 middle:1350 us, +/- 870 ms

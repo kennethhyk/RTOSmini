@@ -702,7 +702,6 @@ void OS_Abort(unsigned int error)
   OS_DI();
   while (1)
   {
-    // toggle_LED_B3();
     _delay_ms(500);
   }
 }
@@ -735,15 +734,11 @@ void main()
 
   init_joystick();
   init_servo();
-  // init laser
-	// set laser as output
-	// DDRB = 0xFF;
 
   OS_Init();  
   printf("=====_OS_START_====\n");
   // // clear memory and prepare queues
 
-  // Task_Create_RR(drive_servo, 1);
   Task_Create_System(send_joystick_packet, 2);
 
   OS_Start();

@@ -1,31 +1,6 @@
 #include "../uart/uart.h"
 #include "util/delay.h"
 
-typedef enum packetEnum {
-	PSTART = '?',
-	PEND = '.'
-} packetEnum;
-
-// void sendPacket(packet * p){
-// 	//start packet
-// 	uart_putchar('?');
-	
-// 	uart_putchar( p->roomba_x & 0xff );
-// 	uart_putchar( (p->roomba_x>>8) & 0xff);
-
-// 	uart_putchar( p->roomba_y & 0xff );
-// 	uart_putchar( (p->roomba_y>>8) & 0xff);
-
-// 	uart_putchar( p->servo_x & 0xff );
-// 	uart_putchar( p->servo_y & 0xff );
-
-// 	uart_putchar( p->laser & 0xff );
-
-// 	//end packet
-// 	uart_putchar('.');
-
-// }
-
 int buildInt(unsigned char H, unsigned char L){
 	int i = 0;
 	i = i | H<<8;

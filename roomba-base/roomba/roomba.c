@@ -102,6 +102,9 @@ void escape(int X, int Y, int period){
     if(period == 3){
         _delay_ms(2000);
     }
+    if(period == 4){
+        _delay_ms(1000);
+    }
 }
 
 void spinMode(int joystick_Y){

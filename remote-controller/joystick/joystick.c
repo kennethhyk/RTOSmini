@@ -16,20 +16,6 @@ char laser = 'b';
 
 bool should_change_mode = false;
 
-void set_laser()
-{
-	// use PB5
-	int pin = 6;
-	PINB |= ~(1 << pin);
-}
-
-void clear_laser()
-{
-	// use PB5
-	int pin = 5;
-	PINB &= (~(1) << pin);
-}
-
 uint16_t i = 500;
 uint16_t j = 500; // to account for pan motor height
 uint16_t pan_offset = 10;
@@ -134,57 +120,11 @@ bool read_joystick(uint16_t pin_x, uint16_t pin_y, JOYSTICK_NUM joystick_id)
 
 		joystick_Y[joystick_id] = total_Y[joystick_id] / num_readings;
 
-		// if (joystick_id == ROOMBA){
-		// 	printf("ROOMBA: X: %d, Y: %d\n", joystick_X[joystick_id], joystick_Y[joystick_id]);
-		// } else {
-		// 	printf("SERVO: X: %d, Y: %d\n", joystick_X[joystick_id], joystick_Y[joystick_id]);
-		// }
 		return true;
 	}
 
 	return false;
 }
-
-// void drive_laser()
-// {
-// 	// calculate cumulative_laser_time
-// 	// 30 * 1000 / 10 ms interrupts
-// 	if (cumulative_laser_time > 40)
-// 	{
-// 		// turn laser off
-// 		clear_laser();
-// 		laser_on = 0;
-// 	}
-// 	// joystick pressed
-// 	// due to PUPDR, PINC == 0 means laser is on
-// 	else if (PINC == 0 || laser_on == 1)
-// 	{
-
-// 		// if laser off
-// 		if (laser_on == 0)
-// 		{
-// 			// turn on laser toggle
-// 			laser_on = 1;
-// 			// write to laser -- fill in code
-// 			set_laser();
-// 			// set last start time
-// 			last_start_time = Now();
-// 		}
-// 		else
-// 		{
-// 			// switch off laser when button is released
-// 			if (PINC != 0)
-// 			{
-// 				laser_on = 0;
-// 				clear_laser();
-// 				// calculate cumulative_laser_time
-// 				unsigned long laser_on_time = Now() - last_start_time;
-// 				last_start_time = 0;
-// 				printf("laser turned on for %ld ticks\n", laser_on_time);
-// 			}
-// 		}
-// 	}
-// }
 
 void set_laser_value()
 {
@@ -245,23 +185,6 @@ void set_changeMode(){
 	should_change_mode = false;
 }
 
-void drive_servo()
-{
-
-	uint16_t roomba_pin_x = 0;
-	uint16_t roomba_pin_y = 1;
-	uint16_t servo_pin_x = 2;
-	uint16_t servo_pin_y = 3;
-
-	while (1)
-	{
-		read_joystick(roomba_pin_x, roomba_pin_y, ROOMBA);
-		_delay_ms(500);
-		// read_joystick(servo_pin_x, servo_pin_y, SERVO);
-		// set_laser_value();
-	}
-}
-
 void send_joystick_packet()
 {
 	uint16_t roomba_pin_x = 0;
@@ -289,20 +212,12 @@ void send_joystick_packet()
 		set_laser_value();
 		set_changeMode();
 		if(should_change_mode) {
-			// change_mode = 0;
 			sendPacket(roomba_x, roomba_y, servo_x, servo_y, laser_on, change_mode);	
 		} else {
-			// change_mode = 1;
 			sendPacket(roomba_x, roomba_y, servo_x, servo_y, laser_on, change_mode);
 		}
 		_delay_ms(20);
 	}
-}
-
-void read_photoressistor()
-{
-	uint16_t pin = 3;
-	int d = analog_read(pin);
 }
 
 bool within_deadband(int value, int base)
@@ -327,51 +242,23 @@ void translate_to_servo_command()
 	{
 		// left
 		servo_x = 'L';
-		// printf("here");
-		// char x = 'L';
-		// p->servo_x = x; 
-		// if ((i - pan_offset) > MIN_X)
-		// {
-		// 	i -= pan_offset;
-		// 	servo_set_pin_pan_2(i);
-		// }
 	}
 
 	else if (joystick_X[joystick_id] > joystick_X_base[joystick_id] && !within_deadband(joystick_X[joystick_id], joystick_X_base[joystick_id]))
 	{
 		// right
 		servo_x = 'R';
-		// printf("rot here");
-		// char x = 'L';
-		// p->servo_x = x;
-		// if ((i + pan_offset) < MAX_X)
-		// {
-		// 	i += pan_offset;
-		// 	servo_set_pin_pan_2(i);
-		// }
 	}
 
 	if (joystick_Y[joystick_id] < joystick_Y_base[joystick_id] && !within_deadband(joystick_Y[joystick_id], joystick_Y_base[joystick_id]))
 	{
 		// down 
 		servo_y = 'D';
-		// p->servo_y = 'D';
-		// if ((j - tilt_offset) > MIN_Y)
-		// {
-		// 	j -= tilt_offset;
-		// 	servo_set_pin_tilt_3(j);
-		// }
 	}
 
 	else if (joystick_Y[joystick_id] > joystick_Y_base[joystick_id] && !within_deadband(joystick_Y[joystick_id], joystick_Y_base[joystick_id]))
 	{
 		// up
 		servo_y = 'U';
-		// p->servo_y = 'U';
-		// if ((j + tilt_offset) < MAX_Y)
-		// {
-		// 	j += tilt_offset;
-		// 	servo_set_pin_tilt_3(j);
-		// }
 	}
 }
