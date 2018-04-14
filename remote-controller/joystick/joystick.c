@@ -211,12 +211,7 @@ void send_joystick_packet()
 
 		set_laser_value();
 		set_changeMode();
-		if(should_change_mode) {
-			sendPacket(roomba_x, roomba_y, servo_x, servo_y, laser_on, change_mode);	
-		} else {
-			sendPacket(roomba_x, roomba_y, servo_x, servo_y, laser_on, change_mode);
-		}
-		_delay_ms(20);
+		sendPacket(roomba_x, roomba_y, servo_x, servo_y, laser_on, change_mode);
 	}
 }
 
