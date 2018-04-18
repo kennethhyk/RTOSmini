@@ -26,5 +26,4 @@ The controller has two cheap PS2 joysticks, which control dumb tesla's movements
 
 Thaaaats right. It even does context-switching manually; literally saves all the registers in memory, and loads it back. And the board has like 8k ram! The OS design is also pretty gnarly! This picture here kinda shows you how it works, but feel free to dig into `kernel.c` to find out more about the demons that live inside!
 
-![OS Structure](https://github.com/therafatm/RTOSmini/raw/master/RTOS.png "OS!")
-
+<img src="https://github.com/therafatm/RTOSmini/raw/master/RTOS.png" align="center" width="800" height="500">
