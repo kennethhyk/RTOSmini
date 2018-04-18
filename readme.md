@@ -3,8 +3,8 @@
 This project is an implementation of a real time OS, written in C, eventually used
 to run dumb tesla using a wireless controller!
 
-![dumbtesla](https://github.com/therafatm/RTOSmini/dumb_tesla.jpg "DUMB TESLA!")
-![controller](https://github.com/therafatm/RTOSmini/controller.jpg "Controller!")
+![dumbtesla](https://github.com/therafatm/RTOSmini/raw/master/dumb_tesla.jpg "DUMB TESLA!")
+![controller](https://github.com/therafatm/RTOSmini/raw/master/controller.jpg "Controller!")
 
 # What is it?
 
@@ -25,5 +25,5 @@ The controller has two cheap PS2 joysticks, which control dumb tesla's movements
 
 Thaaaats right. It even does context-switching manually; literally saves all the registers in memory, and loads it back. And the board has like 8k ram! The OS design is also pretty gnarly! This picture here kinda shows you how it works, but feel free to dig into `kernel.c` to find out more about the demons that live inside!
 
-![OS Structure](https://github.com/therafatm/RTOSmini/OS_flow.png "OS!")
+![OS Structure](https://github.com/therafatm/RTOSmini/raw/master/OS_flow.png "OS!")
 
