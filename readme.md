@@ -4,7 +4,6 @@ This project is an implementation of a real time OS, written in C, eventually us
 to run dumb tesla using a wireless controller!
 
 ![dumbtesla](https://github.com/therafatm/RTOSmini/raw/master/dumb_tesla.jpg "DUMB TESLA!")
-![controller](https://github.com/therafatm/RTOSmini/raw/master/controller.png "Controller!")
 
 # What is it?
 
@@ -20,6 +19,8 @@ code running on is the OS and the app code, i.e. no arduino libraries. All inter
 done using the AVR instruction sets, for e.g. reading analog values from ports using the built in ADC, reading bumpers on the roomba, generating PWM via timers, etc. This project literally runs on the bare metal! 
 
 The controller has two cheap PS2 joysticks, which control dumb tesla's movements, and movement/firing of the laser. By default, DT runs on autonomous mode, with controller commands overriding the semi-autonomous features, however semi-autonomous-ness can be completely turned off with the press of the left joystick.
+
+<img src="https://github.com/therafatm/RTOSmini/raw/master/controller.png" align="center" height="442" width="442">
 
 # You wrote an OS? Holy .....
 
