@@ -8,7 +8,7 @@ to run dumb tesla using a wireless controller!
 
 # What is it?
 
-Dumb tesla is a modded iRobot roomba. It has a pan and tilt kit (two servo motors) with a laser
+Dumb tesla is a modded iRobot roomba. It has a pan andtilt kit (two servo motors) with a laser
 attached on top, and can move around autonomously, which is where it gets its name from. It is also
 connected via bluetooth to a remote controller, which can control it too! The controller is also 
 application code running on the same OS. When it was alive, dumb tesla could move around, aim, and shoot things with its laser, and could play the ocassional 8bit song. 
